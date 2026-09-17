@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-blue-500: #3B82F6;
+  --color-blue-600: #2563EB;
+  --color-sky-400: #38BDF8;
+  --color-indigo-500: #6366F1;
+  --color-slate-50: #F8FAFC;
+  --color-slate-200: #E2E8F0;
+  --color-slate-500: #64748B;
+  --color-slate-900: #0F172A;
+}
+
+@layer base {
+  body {
+    @apply m-0 bg-slate-50 text-slate-900 antialiased;
+  }
+
+  button:not(:disabled) {
+    @apply cursor-pointer;
+  }
+
+  ::selection {
+    @apply bg-blue-100 text-blue-900;
+  }
+}
