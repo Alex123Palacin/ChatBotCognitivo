@@ -1,50 +1,59 @@
-﻿# Chatbot Cognitivo
+# Chatbot Cognitivo · Frontend
 
-Frontend con React, TypeScript, Vite, Tailwind CSS y React Router DOM.
-Al enviar cualquier mensaje, el chatbot responde inmediatamente **hola**.
+React, TypeScript, Tailwind CSS y React Router DOM.
 
-## Ejecutar
+## Iniciar
 
-Desde la carpeta `frontend`:
+Con Django en `http://127.0.0.1:8001` y Ollama abierto, desde `frontend/`:
 
 ```sh
 npm install
 npm run dev
 ```
 
-La pantalla principal está en `/chat`. Las demás rutas redirigen a esa pantalla.
+Abre `http://localhost:5173/chat`. Vite envía las peticiones `/api/` al backend.
+No se llama a Ollama desde el navegador.
 
-## Organización
+## Flujo del código
 
-- `src/main.tsx`: inicia React y BrowserRouter.
-- `src/App.tsx`: define las rutas.
-- `src/pages/ChatbotPage.tsx`: organiza los componentes de la pantalla y el menú móvil.
-- `src/hooks/useChatbot.ts`: guarda el texto y los mensajes, agrega la respuesta `hola`, limpia el chat y desplaza la conversación.
-- `src/types/chatbot.ts`: define los datos de un mensaje: id, contenido, remitente y fecha.
-- `src/components/CabeceraChatComp.tsx`: muestra el nombre del chatbot.
-- `src/components/BarraLateralComp.tsx`: contiene el menú y los botones para iniciar o limpiar la conversación.
-- `src/components/InicioChatComp.tsx`: muestra la bienvenida y las sugerencias.
-- `src/components/MensajeChatComp.tsx`: muestra el contenido y la hora de cada mensaje.
-- `src/components/EntradaChatComp.tsx`: muestra el campo de texto y permite enviar con Enter o insertar un salto con Shift + Enter.
-- `src/ui/BotonUI.tsx`: botón principal reutilizable.
-- `src/ui/IconButtonUI.tsx`: botón reutilizable con icono.
-- `src/index.css`: importa Tailwind y define los colores y estilos base.
+`ChatbotPage.tsx` usa `useChatbot.ts`, que llama a `api/chatbotApi.ts`.
+La API recibe el mensaje de Django y el hook actualiza los mensajes, la pregunta
+pendiente y el estado de escritura. La página distribuye los componentes.
 
-## Funcionamiento
+| Archivo | Responsabilidad |
+| --- | --- |
+| `src/main.tsx` / `src/App.tsx` | Inicio de React y rutas. |
+| `src/pages/ChatbotPage.tsx` | Distribuye la pantalla del chat. |
+| `src/hooks/useChatbot.ts` | Mensajes, sesión temporal, envío, espera, errores, opciones y limpieza. |
+| `src/api/chatbotApi.ts` | Peticiones REST a Django y token CSRF. |
+| `src/types/chatbot.ts` | Tipos de mensajes, preguntas, opciones y resultados. |
+| `src/components/CabeceraChatComp.tsx` | Nombre del chatbot y menú móvil. |
+| `src/components/BarraLateralComp.tsx` | Conversación actual, nuevo chat y limpieza. |
+| `src/components/InicioChatComp.tsx` | Bienvenida y sugerencias. |
+| `src/components/MensajeChatComp.tsx` | Contenido, hora y resultado de cada mensaje. |
+| `src/components/EntradaChatComp.tsx` | Texto y envío con Enter; Shift + Enter inserta una línea. |
+| `src/components/EstadoEscribiendoComp.tsx` | Tres puntos mientras el backend responde. |
+| `src/components/OpcionesPreguntaComp.tsx` | Botones de respuesta y progreso del cuestionario. |
+| `src/components/ResultadoCuestionarioComp.tsx` | Promedios por indicador/dimensión y detalle de respuestas. |
+| `src/ui/` | Botones reutilizables. |
+| `src/index.css` | Tailwind y colores. |
+| `vite.config.ts` | Proxy local de `/api/` a Django. |
 
-1. El usuario escribe y el texto se guarda en `texto`.
-2. `enviarMensaje` comprueba que el texto no esté vacío.
-3. Agrega el mensaje del usuario y la respuesta `hola` a `mensajes`.
-4. Vacía el campo de texto.
-5. La página muestra los mensajes con `MensajeChatComp`.
+El envío se bloquea durante una respuesta. Si falla la conexión, se muestra un error
+sin inventar respuestas; el usuario puede reintentar. Al limpiar el chat se cancela
+la espera y se solicita al servidor borrar la conversación temporal.
 
-Las sugerencias también reciben la respuesta `hola`.
-“Nuevo chat” y “Limpiar conversación” usan la misma función para vaciar el chat.
-Los mensajes solo se guardan mientras la página está abierta; al recargar se borran.
+Los resultados numéricos vienen del backend. El frontend no puntúa texto libre.
+El cuestionario propio de 14 preguntas es orientativo, no es un diagnóstico ni
+el inventario SISCO validado. Las preguntas, fórmulas y límites están documentados
+con detalle en [el README del backend](../backend/README.md).
 
-## Comprobar el código
+## Comprobar
 
 ```sh
 npm run build
 npm run lint
 ```
+
+Las conversaciones no se conservan al recargar. El proxy de Vite es para desarrollo;
+un despliegue necesita dirigir `/api/` a Django y las rutas de React a `index.html`.

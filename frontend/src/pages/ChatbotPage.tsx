@@ -4,12 +4,15 @@ import CabeceraChatComp from '../components/CabeceraChatComp'
 import EntradaChatComp from '../components/EntradaChatComp'
 import InicioChatComp from '../components/InicioChatComp'
 import MensajeChatComp from '../components/MensajeChatComp'
+import EstadoEscribiendoComp from '../components/EstadoEscribiendoComp'
+import OpcionesPreguntaComp from '../components/OpcionesPreguntaComp'
 import { useChatbot } from '../hooks/useChatbot'
 
 function ChatbotPage() {
   const {
     mensajes, texto, setTexto, enviarMensaje,
     limpiarConversacion, finConversacionRef, entradaRef,
+    pregunta, marcarOpcion, cargando, error,
   } = useChatbot()
   const [menuAbierto, setMenuAbierto] = useState(false)
 
@@ -35,11 +38,14 @@ function ChatbotPage() {
                 <div role="log" aria-label="Conversación con Chatbot Cognitivo" aria-live="polite" aria-relevant="additions" className="space-y-6">
                   {mensajes.map((mensaje) => <MensajeChatComp key={mensaje.id} mensaje={mensaje} />)}
                 </div>
+                {pregunta && <OpcionesPreguntaComp pregunta={pregunta} alMarcar={marcarOpcion} deshabilitado={cargando} />}
+                {cargando && <EstadoEscribiendoComp />}
               </div>
             )}
             <div ref={finConversacionRef} />
           </div>
-          <EntradaChatComp texto={texto} cambiarTexto={setTexto} enviar={enviarMensaje} entradaRef={entradaRef} />
+          {error && <p role="alert" className="mx-auto w-full max-w-3xl px-5 pt-3 text-sm text-red-700">{error}</p>}
+          <EntradaChatComp texto={texto} cambiarTexto={setTexto} enviar={() => { void enviarMensaje() }} entradaRef={entradaRef} cargando={cargando} />
         </main>
       </div>
     </>

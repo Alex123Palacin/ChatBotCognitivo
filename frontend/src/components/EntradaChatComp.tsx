@@ -7,10 +7,11 @@ interface EntradaChatProps {
   texto: string
   cambiarTexto: (texto: string) => void
   enviar: () => void
+  cargando: boolean
   entradaRef: RefObject<HTMLTextAreaElement | null>
 }
 
-function EntradaChatComp({ texto, cambiarTexto, enviar, entradaRef }: EntradaChatProps) {
+function EntradaChatComp({ texto, cambiarTexto, enviar, entradaRef, cargando }: EntradaChatProps) {
   useEffect(() => {
     const entrada = entradaRef.current
     if (!entrada) return
@@ -36,12 +37,14 @@ function EntradaChatComp({ texto, cambiarTexto, enviar, entradaRef }: EntradaCha
             }}
             placeholder="Escribe tu mensaje..."
             rows={1}
+            readOnly={cargando}
+            maxLength={2000}
             aria-describedby="ayuda-entrada"
             className="block max-h-36 min-h-10 w-full resize-none bg-transparent py-2 text-base leading-6 text-slate-700 outline-none placeholder:text-slate-400 sm:text-[15px]"
           />
           <div className="flex items-center justify-between gap-3">
             <p id="ayuda-entrada" className="text-[10px] text-slate-400"><span className="hidden sm:inline">Enter para enviar · Shift + Enter para una nueva línea</span><span className="sm:hidden">Una conversación a tu ritmo</span></p>
-            <IconButtonUI etiqueta="Enviar mensaje" type="submit" disabled={!texto.trim()} className="size-9 rounded-xl bg-linear-to-br from-blue-600 to-indigo-500 text-white hover:text-white disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 disabled:opacity-100">
+            <IconButtonUI etiqueta="Enviar mensaje" type="submit" disabled={!texto.trim() || cargando} className="size-9 rounded-xl bg-linear-to-br from-blue-600 to-indigo-500 text-white hover:text-white disabled:from-slate-200 disabled:to-slate-200 disabled:text-slate-400 disabled:opacity-100">
               <ArrowUp size={20} />
             </IconButtonUI>
           </div>
