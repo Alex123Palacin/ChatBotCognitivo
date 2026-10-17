@@ -33,13 +33,20 @@ CSRF_TRUSTED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://127.0.0.1:11434').rstrip('/')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'deepseek-r1:8b')
 OLLAMA_TIMEOUT = 180
+OLLAMA_ANALYSIS_TIMEOUT = int(os.environ.get('OLLAMA_ANALYSIS_TIMEOUT', '360'))
+OLLAMA_ANALYSIS_DIRECT = os.environ.get('OLLAMA_ANALYSIS_DIRECT', 'true').strip().lower() not in ('false', '0', 'no', 'off')
+OLLAMA_CHAT_DIRECT = os.environ.get('OLLAMA_CHAT_DIRECT', 'true').strip().lower() not in ('false', '0', 'no', 'off')
+OLLAMA_CHAT_MAX_TOKENS = int(os.environ.get('OLLAMA_CHAT_MAX_TOKENS', '512'))
+OLLAMA_NUM_GPU = int(os.environ.get('OLLAMA_NUM_GPU', '16'))
+OLLAMA_NUM_CTX = int(os.environ.get('OLLAMA_NUM_CTX', '4096'))
 
-# Conversaciones temporales en memoria: no crea tablas ni requiere migraciones.
-CACHES = {'default': {
-    'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-    'LOCATION': 'chatbot-conversaciones',
-    'OPTIONS': {'MAX_ENTRIES': 1000},
-}}
+# La conversación, las semanas y las evidencias se guardan en SQLite.
+# La caché solo limita los intentos fallidos de inicio de sesión.
+CSRF_FAILURE_VIEW = 'principal.http.csrf_fallido'
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10000
 
 
 # Application definition
@@ -50,7 +57,11 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'usuarios',
     'django.contrib.staticfiles',
+    'chat',
+    'sesiones',
+    'reportes',
 ]
 
 MIDDLEWARE = [
@@ -90,6 +101,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {'timeout': 20},
     }
 }
 
@@ -116,9 +128,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es-pe'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Lima'
 
 USE_I18N = True
 

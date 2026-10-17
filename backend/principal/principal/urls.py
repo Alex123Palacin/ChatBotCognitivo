@@ -1,26 +1,20 @@
-"""
-URL configuration for principal project.
+﻿from django.contrib import admin
+from django.urls import path
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-from django.contrib import admin
-from django.urls import path, re_path
-from . import chat_views
+from chat import views as chat_views
+from reportes import views as reportes_views
+from usuarios import views as auth_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/csrf/', chat_views.csrf),
+    path('api/csrf/', auth_views.csrf),
+    path('api/auth/registro/', auth_views.registro),
+    path('api/auth/login/', auth_views.iniciar_sesion),
+    path('api/auth/logout/', auth_views.cerrar_sesion),
+    path('api/auth/me/', auth_views.me),
     path('api/chat/', chat_views.chat),
-    re_path(r'^api/chat/(?P<sesion_id>[0-9a-f]{32})/$', chat_views.borrar_chat),
+    path('api/admin/alumnos/', reportes_views.alumnos),
+    path('api/admin/alumnos/<int:alumno_id>/', reportes_views.alumno),
+    path('api/admin/alumnos/<int:alumno_id>/reportes/', reportes_views.alumno),
+    path('api/admin/reportes/<int:reporte_id>/', reportes_views.reporte),
 ]

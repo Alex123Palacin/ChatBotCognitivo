@@ -2,54 +2,37 @@ export interface MensajeChat {
   id: string
   contenido: string
   remitente: 'usuario' | 'asistente'
-  fecha: Date
-  resultado?: ResultadoCuestionario | null
+  fecha: string
+  sesion_numero: number
+  clave_envio?: string
+  respuesta_estado?: 'pendiente' | 'respondido' | 'error'
 }
 
-export interface OpcionPregunta {
-  valor: string
-  texto: string
+export interface SesionSemanal {
+  id: number
+  numero: number
+  inicio: string
+  fin: string
+  estado: 'activa' | 'pendiente' | 'cerrada'
+  reporte_id: number | null
 }
 
-export interface PreguntaChat {
-  id: string
-  texto: string
-  opciones: OpcionPregunta[]
-  indicador?: string
-  numero?: number
-  total?: number
+export interface MensajePendiente {
+  clave_envio: string
+  mensaje: string
+  estado: 'pendiente' | 'error'
 }
 
-interface Puntaje {
-  id: string
-  nombre: string
-  promedio: number | null
-  respondidas: number
-  total: number
-  dimension?: string
-}
-
-export interface ResultadoCuestionario {
-  instrumento: string
-  periodo: string
-  respondidas: number
-  total: number
-  indicadores: Puntaje[]
-  dimensiones: Puntaje[]
-  respuestas: { id: string; pregunta: string; valor: number | null }[]
-  nota: string
+export interface EstadoChat {
+  mensajes: MensajeChat[]
+  sesiones: SesionSemanal[]
+  sesion_actual: SesionSemanal | null
+  programa_finalizado: boolean
+  respuesta_pendiente: boolean
+  mensaje_pendiente?: MensajePendiente | null
 }
 
 export interface SolicitudChat {
-  sesion_id: string | null
   mensaje: string
-  pregunta_id: string | null
-  opcion?: string
-}
-
-export interface RespuestaChat {
-  sesion_id: string
-  contenido: string
-  pregunta: PreguntaChat | null
-  resultado: ResultadoCuestionario | null
+  clave_envio: string
 }

@@ -1,162 +1,123 @@
 # Backend del Chatbot Cognitivo
 
-Django recibe los mensajes de React y consulta el modelo local `deepseek-r1:8b` de Ollama.
-La carpeta `principal/ml/` es un paquete Python normal, **no una app Django**: no está en
-`INSTALLED_APPS`, no tiene modelos ni migraciones.
+Django guarda cuentas, conversaciones, semanas, evidencias y reportes en SQLite. La carpeta `principal/ml/` sigue siendo un paquete Python normal: **no está en INSTALLED_APPS ni tiene tablas o migraciones**.
 
-## Iniciar
+## Ejecutar
 
-Desde `backend/`, con Ollama abierto y el modelo ya descargado:
+Con Ollama abierto, desde `backend/principal`:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-cd principal
-..\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8001
+..\.venv\Scripts\python.exe manage.py migrate
+..\.venv\Scripts\python.exe manage.py iniciar_backend
 ```
 
-Desde `frontend/`, en otra terminal: `npm run dev`. Abre `http://localhost:5173/chat`.
-Vite reenvía `/api/` a Django; el navegador no consulta directamente Ollama.
+Este comando inicia Django en `127.0.0.1:8000` y el procesador semanal. Desde `frontend`, en otra terminal: `npm run dev`. El script `iniciar.ps1` de la raíz hace ambos pasos automáticamente.
 
-Configuración en `principal/settings.py`:
+En **http://localhost:5173/administrador** entra con usuario **`admin`** y contraseña **`admin`**. `iniciar_backend` y `runserver` preparan esta cuenta automáticamente para desarrollo (`DEBUG=True`). El comando `manage.py preparar_admin` también permite prepararla manualmente: es idempotente y conserva contraseñas/permisos existentes. No hay consultas de creación al cargar las apps. La cuenta nueva tiene permisos administrativos del panel, sin permisos de superusuario.
 
-- `OLLAMA_MODEL`: `deepseek-r1:8b` (también admite una variable de entorno).
-- `OLLAMA_URL`: `http://127.0.0.1:11434` (también admite una variable de entorno).
-- `OLLAMA_TIMEOUT`: 180 segundos.
-- `num_predict`: 1400 en `ml/ollama.py`. El modelo puede consumir parte del presupuesto
-  en razonamiento interno; este no se envía al navegador.
+## Carpetas y archivos
 
-## Responsabilidades
+Todas estas rutas se encuentran dentro de `backend/principal/`:
 
-| Archivo | Responsabilidad |
+| Ruta | Responsabilidad |
 | --- | --- |
-| `principal/ml/ollama.py` | Envía el historial a Ollama, define las instrucciones del asistente y trata los errores del modelo. |
-| `principal/ml/conversacion.py` | Controla presentación, conversación, cuestionario, pausas y resumen. La IA no decide el orden ni cambia los puntajes. |
-| `principal/ml/cuestionario.py` | Contiene las 14 preguntas, las opciones de frecuencia y el cálculo de promedios. |
-| `principal/ml/tests.py` | Prueba cálculos, omisiones, transiciones, seguridad básica y endpoints con Ollama sustituido por un mock. |
-| `principal/principal/chat_views.py` | Recibe JSON, valida entradas y guarda temporalmente el estado de cada conversación. |
-| `principal/principal/urls.py` | Define los endpoints. |
+| `manage.py` | Ejecuta comandos Django, migraciones, pruebas y servidores. |
+| `principal/settings.py` | Base de datos, apps, zona horaria, cookies, CSRF y configuración de Ollama. |
+| `principal/urls.py` | Conecta las rutas REST con las vistas. |
+| `principal/http.py` | Comprueba métodos, autenticación y rol; devuelve errores JSON. |
+| `usuarios/models.py` | Perfil del usuario: inicio del programa, última actividad y reserva de respuesta en curso. El usuario y su contraseña pertenecen al sistema de autenticación de Django. |
+| `usuarios/views.py` | Registro, login, logout, usuario actual y token CSRF. El registro siempre crea un estudiante. |
+| `usuarios/management/commands/crear_admin.py` | Crea el acceso administrativo pidiendo la contraseña sin mostrarla. |
+| `usuarios/management/commands/preparar_admin.py` | Prepara la cuenta local solicitada `admin/admin` si todavía no existe. |
+| `usuarios/management/commands/runserver.py` | Prepara el administrador antes de iniciar el servidor de desarrollo. |
+| `chat/models.py` | Mensaje persistido, autor, semana, clave del envío, respuesta asociada y estado del análisis. |
+| `chat/views.py` | API del historial y envío de mensajes del estudiante autenticado. |
+| `chat/services.py` | Guarda antes de consultar Ollama, evita envíos duplicados, mantiene una sola respuesta por alumno y prepara historial/contexto. |
+| `sesiones/models.py` | Semana numerada, comienzo, fin y estado. |
+| `sesiones/services.py` | Crea cuatro periodos de siete días y actualiza las semanas activas/cerradas. |
+| `sesiones/management/commands/procesar_semanas.py` | Proceso periódico que analiza mensajes pendientes y genera/actualiza reportes al vencer la semana. |
+| `sesiones/management/commands/iniciar_backend.py` | Arranca servidor y procesador juntos para desarrollo. |
+| `reportes/models.py` | Evidencia asociada al mensaje de origen y un único reporte por semana. |
+| `reportes/services.py` | Valida/persiste evidencia, reintenta análisis, compone reportes y conclusiones por indicador. |
+| `reportes/views.py` | Listado de alumnos, sus semanas/reportes y detalle de un reporte; solo para administradores. |
+| `ml/ollama.py` | Cliente HTTP local de Ollama; controla contexto, formato JSON, tiempo de espera y errores. Oculta el razonamiento interno. |
+| `ml/conversacion.py` | Instrucciones empáticas para la conversación libre. Sin fases de cuestionario. |
+| `ml/analisis.py` | Define dimensiones/indicadores, extrae citas con un esquema JSON y sintetiza observaciones. |
+| `*/migrations/` | Cambios de estructura de las tablas; sí se versionan. |
+| `usuarios/tests.py`, `chat/tests.py`, `reportes/tests.py`, `ml/tests.py` | Comprueban permisos, sesiones, reintentos, semanas, reportes y validación del análisis. |
 
-## Recorrido de la conversación
+## Recorrido de un mensaje
 
-1. El estudiante escribe. Ollama responde y se pregunta cómo desea que lo llamen.
-2. Apodo opcional. Puede elegir **Prefiero no decirlo**.
-3. Grado: **5.º de secundaria**, **Otro grado** o **Prefiero no decirlo**.
-4. Pregunta abierta: **¿Cómo te está yendo con tus estudios y qué te preocupa más estos días?**
-5. La IA reconoce su contexto. El estudiante elige **Empezar cuestionario** o **Seguir conversando**.
-6. Si acepta, responde las 14 preguntas sobre **las últimas dos semanas**.
-7. Después de las preguntas 4 y 8 se ofrecen dos reflexiones abiertas:
-   **¿Qué situación escolar te está generando más presión?** y
-   **¿Cómo afectan estas preocupaciones a tu día a día?** Se pueden omitir.
-8. Al terminar, se muestran los promedios y una interpretación breve generada por Ollama.
-   Se puede seguir conversando sobre el resultado.
+1. La cookie de Django identifica al estudiante; no se acepta un identificador de otro alumno enviado por el navegador.
+2. Se valida el texto y su `clave_envio`. La misma clave permite reintentar sin duplicar el mensaje.
+3. Se guarda el mensaje. Si es el primero, se crean las cuatro semanas.
+4. Se libera la transacción de base de datos antes de llamar a Ollama.
+5. Ollama recibe conversación reciente, nombre o apodo, semana y contexto anterior sustentado en mensajes/citas. Su respuesta se guarda y se devuelve a React.
+6. El procesador analiza el mensaje del estudiante por separado. Las respuestas del asistente nunca se convierten en evidencia.
+7. Al vencer la semana se crea el reporte aunque el estudiante no vuelva a entrar. Si faltan análisis, aparece en proceso y se actualiza al completarlos.
 
-En cada pregunta de frecuencia hay siete botones:
-**Nunca (1)**, **Rara vez (2)**, **Algunas veces (3)**, **Casi siempre (4)**,
-**Siempre (5)**, **Prefiero omitir esta pregunta**, **Pausar cuestionario**.
-También se puede escribir el número del 1 al 5 o el nombre de la frecuencia.
-El texto libre recibe atención del modelo, pero no se convierte automáticamente en un puntaje.
+Si el modelo falla, el mensaje permanece guardado. Si Django reinicia durante una respuesta, una reserva temporal vence y permite recuperar el envío. Las conversaciones ya no caducan por dos horas de inactividad.
 
-La pausa permite conversar, retomar donde se quedó o ver un resultado parcial.
-“Nuevo chat” y “Limpiar conversación” comienzan de nuevo.
+## Análisis y reportes
 
-## Las 14 preguntas
+Cada evidencia contiene indicador, cita literal, observación y una señal:
 
-Todas empiezan con «¿Con qué frecuencia…?» y se refieren a las últimas dos semanas.
+- `dificultad`: problema que el estudiante relata.
+- `recurso`: estrategia de afrontamiento que dice utilizar.
+- `ausencia_explicita`: algo que niega o un recurso cuya ausencia expresa. La observación explica qué negó.
 
-| N.º | Indicador | Pregunta |
+Una cita debe existir exactamente en el mensaje de origen. No se usan frases inventadas, supuestas experiencias a partir de consejos ni indicadores desconocidos. La validación comprueba estructura y trazabilidad; no reemplaza la revisión de las interpretaciones del modelo.
+
+Cada reporte contiene periodo, número de mensajes, resumen, las tres dimensiones, sus siete indicadores, conclusiones, citas, fechas y nota sobre información limitada. Sin información no se asigna estrés bajo. Los conteos describen cuánto material hay; no son un puntaje de estrés.
+
+La consulta del alumno incluye `reporte_actual`, una lectura provisional de la semana vigente (o de la semana 4 si terminó el programa). Reutiliza únicamente evidencias guardadas: abrir el panel no dispara Ollama ni crea un reporte semanal anticipado. `cobertura` indica cuántos indicadores/dimensiones tienen citas, cuáles faltan y cuántos mensajes esperan análisis. `puede_describir_indicadores` significa que hay al menos un indicador sustentado; nunca equivale a una evaluación SISCO suficiente. Las métricas del alumno abarcan todo el programa: primer/último mensaje, días distintos con conversación y mensajes analizados/pendientes. Las consultas administrativas no escriben en las tablas.
+
+El cuestionario de 14 preguntas fue eliminado. Esta versión **no aplica SISCO ni su escala 1–5**. Conserva las dimensiones/indicadores proporcionados en la tesis mediante un procedimiento cualitativo que todavía requiere validación metodológica para investigación.
+
+## Endpoints
+
+| Método | Ruta | Uso |
 | --- | --- | --- |
-| 1 | Sobrecarga académica | ¿Con qué frecuencia la cantidad de tareas te ha parecido difícil de manejar? |
-| 2 | Sobrecarga académica | ¿Con qué frecuencia has sentido que se juntaban demasiados trabajos o exámenes? |
-| 3 | Presión del tiempo | ¿Con qué frecuencia has sentido que te faltaba tiempo para terminar tus tareas? |
-| 4 | Presión del tiempo | ¿Con qué frecuencia los plazos de entrega te han generado presión? |
-| 5 | Síntomas físicos | ¿Con qué frecuencia has tenido dificultad para dormir al pensar en tus estudios? |
-| 6 | Síntomas físicos | ¿Con qué frecuencia has notado tensión o cansancio físico en momentos de preocupación por tus estudios? |
-| 7 | Síntomas psicológicos | ¿Con qué frecuencia te has sentido preocupado o nervioso por tus responsabilidades escolares? |
-| 8 | Síntomas psicológicos | ¿Con qué frecuencia las preocupaciones escolares te han dificultado concentrarte? |
-| 9 | Planificación | ¿Con qué frecuencia has organizado un horario para tus tareas y tu descanso? |
-| 10 | Planificación | ¿Con qué frecuencia has dividido una tarea grande en pasos pequeños? |
-| 11 | Automotivación | ¿Con qué frecuencia has reconocido tus avances, aunque fueran pequeños? |
-| 12 | Automotivación | ¿Con qué frecuencia te has animado a seguir intentando después de una dificultad escolar? |
-| 13 | Búsqueda de soporte | ¿Con qué frecuencia has pedido ayuda para comprender una tarea o un tema difícil? |
-| 14 | Búsqueda de soporte | ¿Con qué frecuencia has hablado con alguien de confianza sobre tus preocupaciones escolares? |
+| GET | `/api/csrf/` | Token de protección CSRF. |
+| POST | `/api/auth/registro/` | Nombre o apodo, Gmail y contraseña propia. |
+| POST | `/api/auth/login/` | Iniciar sesión con `username` y `password`; también acepta `email` para compatibilidad. |
+| POST | `/api/auth/logout/` | Cerrar sesión. |
+| GET | `/api/auth/me/` | Usuario actual o null. |
+| GET | `/api/chat/` | Historial, semanas y respuesta pendiente del propio alumno. |
+| POST | `/api/chat/` | `mensaje` y `clave_envio` UUID. |
+| GET | `/api/admin/alumnos/` | Estudiantes y actividad reciente. |
+| GET | `/api/admin/alumnos/<id>/` | Alumno, métricas, cuatro semanas, reporte provisional y reportes acumulados. |
+| GET | `/api/admin/reportes/<id>/` | Reporte con evidencias y conclusiones. |
 
-## Cómo se calcula
+`en_linea` indica actividad autenticada durante los últimos cinco minutos, y el logout lo desactiva. No significa una conexión permanente comprobada.
 
-Este es un **cuestionario exploratorio propio**, basado en los siete indicadores de la tabla
-de la tesis. No es una transcripción ni una versión validada del inventario SISCO.
-El promedio es un resumen descriptivo de respuestas ordinales; no tiene baremos clínicos.
+## Ollama y entrenamiento
 
-- Cada indicador promedia sus dos respuestas: `(respuesta 1 + respuesta 2) / 2`.
-- Estímulos estresores: promedio de las preguntas 1–4.
-- Síntomas: promedio de las preguntas 5–8.
-- Estrategias de afrontamiento: promedio de las preguntas 9–14.
-- Los promedios se redondean a dos decimales, en una escala de 1 a 5.
-- Solo se calcula un promedio si todas las preguntas de ese indicador o dimensión tienen respuesta.
-  Una omisión se conserva como `null`; nunca como cero. Se muestra **Incompleto**.
-- Una puntuación mayor en estresores/síntomas indica mayor frecuencia reportada.
-- Una puntuación mayor en afrontamiento indica mayor frecuencia de uso de estrategias.
-  **No indica mayor estrés**. No se invierte ni se mezcla con las otras dimensiones.
-- No se calcula un puntaje global, porcentaje de estrés ni nivel leve/moderado/severo.
-- Apodo, grado, conversación y reflexiones no añaden puntos. La IA solo usa ese contenido como contexto.
+Se usa `deepseek-r1:8b` ya descargado. No se modificaron sus pesos, no hubo fine-tuning, no se entrenó con el PDF y no se incorporó un dataset. Las instrucciones y los indicadores son contexto de inferencia.
 
-Ejemplo: sobrecarga con respuestas 4 y 5 da **4.5/5**. Planificación con respuestas
-2 y 3 da **2.5/5**. Son frecuencias de aspectos diferentes, no probabilidades ni diagnósticos.
+Variables opcionales: `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_GPU`, `OLLAMA_NUM_CTX`, `OLLAMA_ANALYSIS_TIMEOUT`, `OLLAMA_CHAT_DIRECT` y `OLLAMA_CHAT_MAX_TOKENS`. La configuración local usa 16 capas de GPU y contexto de 4096 tokens para compartir memoria con otras aplicaciones; si hay mucha carga, la respuesta puede tardar. Algunas versiones de DeepSeek continúan razonando internamente aunque se solicite `think:false`; ese texto no llega al estudiante.
 
-Los datos estructurados siempre proceden de Python. La interpretación en lenguaje natural
-procede de Ollama y puede contener errores. Si la IA falla al interpretar el resultado,
-los puntajes calculados siguen disponibles y se informa de ello.
+El chat tiene 180 segundos de espera; el análisis en segundo plano dispone de 360 segundos. Si un estudiante envía un mensaje durante una inferencia analítica, el procesador cierra esa conexión para ceder el modelo al chat y reintenta el análisis después. Esta prioridad se aplica a todos los estudiantes que comparten el modelo, no solo al dueño del mensaje analizado.
 
-Esta etapa no incluye medición pretest/postest ni demuestra una reducción del estrés.
+El analizador y la conversación usan por defecto salida directa mediante [la API `/api/generate` de Ollama](https://docs.ollama.com/api/generate), con la plantilla verificada del `deepseek-r1:8b` instalado. La plantilla conserva todas las instrucciones y los turnos recientes seleccionados; inicia la respuesta después de un bloque de pensamiento vacío para reducir la espera. El chat dispone de hasta 512 tokens de salida y conserva la comprobación de respuesta completa. No se entrega un mensaje cortado como si estuviera terminado.
 
-## API REST
+Puedes establecer `OLLAMA_CHAT_DIRECT=false` para restaurar `/api/chat` con su presupuesto nativo de 1800 tokens, o `OLLAMA_ANALYSIS_DIRECT=false` para usar el modo nativo en el análisis. Los ejemplos de las instrucciones ayudan a clasificar, pero no entrenan los pesos. El analizador mantiene su esquema por indicador y las observaciones a partir de citas validadas. La comparación del mismo mensaje académico con 16 capas de GPU pasó de 63,23 segundos nativos a 8,26 segundos directos; se comprobaron además saludo, continuidad y cambio de tema. Estos pocos casos verifican funcionamiento, sin establecer una precisión general ni tiempos garantizados.
 
-- `GET /api/csrf/`: obtiene el token CSRF.
-- `POST /api/chat/`: procesa un mensaje o una opción.
-- `DELETE /api/chat/<sesion_id>/`: elimina la conversación temporal.
+La extracción utiliza el campo `format` de [las salidas estructuradas oficiales de Ollama](https://docs.ollama.com/capabilities/structured-outputs). Django valida nuevamente la cita y el indicador antes de guardar.
 
-Primer mensaje:
-
-```json
-{"sesion_id": null, "mensaje": "Hola, tengo varios exámenes", "pregunta_id": null}
-```
-
-Respuesta a una opción (usar el identificador de sesión devuelto por el servidor):
-
-```json
-{"sesion_id": "identificador_de_32_caracteres", "pregunta_id": "sobrecarga_1", "opcion": "4", "mensaje": "Casi siempre (4)"}
-```
-
-La respuesta incluye `sesion_id`, `contenido`, `pregunta` (opciones y progreso) y,
-al finalizar, `resultado`. La API valida el identificador de la pregunta para evitar
-aplicar una respuesta antigua a otra pregunta.
-
-Los POST y DELETE requieren el encabezado `X-CSRFToken` y la cookie que se obtiene con el GET.
-Errores: 400 entrada inválida; 403 CSRF; 409 otra respuesta en curso; 410 sesión caducada;
-503 Ollama no disponible. El frontend muestra el error y conserva la respuesta para reintentar.
-
-## Estado y límites de esta etapa local
-
-Las conversaciones están en la caché de memoria de Django y caducan tras dos horas sin uso.
-No se escriben chats en SQLite ni se usa almacenamiento local del navegador. Al recargar
-React se pierde el identificador del chat; al reiniciar Django se pierde la caché.
-La caché local está pensada para un único proceso de desarrollo, no para varios workers.
-Limpiar el chat cancela la espera en React y solicita su eliminación en Django; una
-generación de Ollama ya iniciada puede continuar hasta terminar, sin mostrarse en el chat nuevo.
-
-Hay una regla básica para interrumpir el cuestionario ante algunas expresiones explícitas
-de autolesión/peligro y orientar a apoyo humano. No detecta todos los casos ni sustituye
-un protocolo profesional para trabajar con estudiantes menores de edad.
-
-## Verificación
-
-Desde `backend/principal/`:
+## Procesamiento y pruebas
 
 ```powershell
+# Una pasada o ejecución continua
+..\.venv\Scripts\python.exe manage.py procesar_semanas
+..\.venv\Scripts\python.exe manage.py procesar_semanas --continuo --intervalo 15
+
+# Comprobar el proyecto
 ..\.venv\Scripts\python.exe manage.py check
-..\.venv\Scripts\python.exe manage.py test ml
+..\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
+..\.venv\Scripts\python.exe manage.py test usuarios chat reportes ml
 ```
 
-Referencias de implementación: [API Chat de Ollama](https://docs.ollama.com/api/chat)
-y [CSRF de Django](https://docs.djangoproject.com/en/6.0/howto/csrf/).
-El instrumento original se identifica en [Barraza, 2007](https://editorialupd.mx/revistas/index.php/ined/article/view/54);
-las preguntas breves de esta versión son propias y no se presentan como ese instrumento.
+Los tests sustituyen Ollama para probar de forma repetible los permisos y la lógica de almacenamiento. También se probó el modelo real con relatos de dos y siete indicadores, negaciones, ficción y una lesión deportiva, además del recorrido HTTP hasta el reporte automático. Las pruebas reales son una comprobación limitada, no una validación científica: el caso de negaciones omitió dos menciones de ausencia de síntomas, que quedaron sin información. Las citas permiten revisar qué se extrajo y qué se interpretó.
+
+Mantén activo el procesador para los cierres automáticos. Al reiniciar, procesa las semanas vencidas sin alterar sus fechas. El archivo SQLite y los registros están excluidos de Git; conserva copias de tus datos si necesitas respaldarlos.

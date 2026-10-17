@@ -1,19 +1,21 @@
-import { useEffect, useRef } from 'react'
-import { MessageCircle, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { LogOut, MessageCircle, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import BotonUI from '../ui/BotonUI'
+import { useAuth } from '../hooks/useAuth'
+import type { SesionSemanal } from '../types/chatbot'
 import IconButtonUI from '../ui/IconButtonUI'
 
 interface BarraLateralProps {
   abierto: boolean
   cerrar: () => void
-  nuevaConversacion: () => void
-  limpiarConversacion: () => void
-  tituloConversacion?: string
-  hayMensajes: boolean
+  sesiones: SesionSemanal[]
+  finalizado: boolean
 }
 
-function BarraLateralComp({ abierto, cerrar, nuevaConversacion, limpiarConversacion, tituloConversacion, hayMensajes }: BarraLateralProps) {
+function BarraLateralComp({ abierto, cerrar, sesiones, finalizado }: BarraLateralProps) {
+  const { usuario, cerrarSesion } = useAuth()
+  const [error, setError] = useState('')
+  const [saliendo, setSaliendo] = useState(false)
   const dialogoRef = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -21,46 +23,62 @@ function BarraLateralComp({ abierto, cerrar, nuevaConversacion, limpiarConversac
     if (!abierto && dialogoRef.current?.open) dialogoRef.current?.close()
   }, [abierto])
 
-  function ejecutar(accion: () => void) {
-    dialogoRef.current?.close()
-    cerrar()
-    accion()
+  async function salir() {
+    setSaliendo(true)
+    setError('')
+    try { await cerrarSesion() }
+    catch (fallo) { setError(fallo instanceof Error ? fallo.message : 'No se pudo cerrar tu sesión.') }
+    finally { setSaliendo(false) }
   }
 
   const contenido = (
     <>
-      <Link to="/chat" onClick={cerrar} aria-label="Bienestar Académico, inicio" className="flex items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-blue-600">
-        <span className="text-[15px] leading-5 font-semibold tracking-tight">Bienestar<span className="block text-slate-500">Académico</span></span>
+      <Link to="/chat" onClick={cerrar} className="rounded-lg focus-visible:outline-2 focus-visible:outline-blue-600">
+        <span className="text-[15px] leading-5 font-semibold tracking-tight">Chatbot<span className="block text-slate-500">Cognitivo</span></span>
       </Link>
-
-      <BotonUI onClick={() => ejecutar(nuevaConversacion)} className="mt-10 w-full"><Plus size={18} /> Nuevo chat</BotonUI>
-
-      <div className="mt-9">
+      <div className="mt-10">
         <p className="mb-3 px-2 text-[10px] font-semibold tracking-[0.13em] text-slate-500 uppercase">Tu espacio</p>
-        <div aria-current="true" className="flex items-start gap-3 rounded-xl border border-blue-100/80 bg-blue-50 px-3 py-3.5 text-blue-700">
+        <div aria-current="page" className="flex items-start gap-3 rounded-xl border border-blue-100/80 bg-blue-50 px-3 py-3.5 text-blue-700">
           <MessageCircle size={18} className="mt-0.5 shrink-0" />
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold">Conversación actual</p>
-            <p className="mt-1 truncate text-xs text-slate-500" title={tituloConversacion}>{tituloConversacion || 'Un nuevo comienzo'}</p>
+            <p className="text-[13px] font-semibold">Mi conversación</p>
+            <p className="mt-1 text-xs text-slate-500">Un mismo chat, cuatro semanas</p>
           </div>
-          <span className="mt-1.5 ml-auto size-1.5 shrink-0 rounded-full bg-blue-500" />
         </div>
       </div>
-
+      <div className="mt-8">
+        <p className="mb-3 px-2 text-[10px] font-semibold tracking-[0.13em] text-slate-500 uppercase">Sesiones semanales</p>
+        {sesiones.length === 0 ? <p className="px-2 text-xs leading-5 text-slate-500">Tu primera semana empieza cuando envías tu primer mensaje.</p> : (
+          <ol className="space-y-2">
+            {sesiones.map((sesion) => (
+              <li key={sesion.id} className={`rounded-xl px-3 py-2.5 ${sesion.estado === 'activa' ? 'bg-white shadow-xs' : ''}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-slate-700">Semana {sesion.numero}</span>
+                  <span className={`text-[10px] ${sesion.estado === 'activa' ? 'text-blue-600' : 'text-slate-400'}`}>{sesion.estado === 'activa' ? 'En curso' : sesion.estado === 'cerrada' ? 'Completada' : 'Próxima'}</span>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">{new Date(sesion.inicio).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })} · {new Date(sesion.fin).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+        {finalizado && <p className="mt-3 px-2 text-xs text-blue-600">Terminaste tus cuatro semanas. Tu historial sigue aquí.</p>}
+      </div>
       <div className="mt-auto border-t border-slate-200 pt-4">
-        <button type="button" onClick={() => ejecutar(limpiarConversacion)} disabled={!hayMensajes} className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] text-slate-500 transition hover:bg-white hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-40">
-          <Trash2 size={17} /> Limpiar conversación
+        <p className="truncate px-3 text-xs font-semibold text-slate-700">{usuario?.nombre || 'Estudiante'}</p>
+        <p className="mt-1 truncate px-3 text-[11px] text-slate-500" title={usuario?.email}>{usuario?.email}</p>
+        <button type="button" onClick={() => { void salir() }} disabled={saliendo} className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] text-slate-500 transition hover:bg-white hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-40">
+          <LogOut size={17} /> {saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>
-        <p className="mt-5 px-3 text-[10px] tracking-wide text-slate-400">BIENESTAR ACADÉMICO · 2026</p>
+        {error && <p role="alert" className="px-3 text-xs text-red-700">{error}</p>}
       </div>
     </>
   )
 
   return (
     <>
-      <aside aria-label="Navegación del chat" className="hidden h-full w-64 shrink-0 flex-col border-r border-slate-200/80 bg-slate-50/90 px-5 py-7 md:flex xl:w-72 xl:px-6">{contenido}</aside>
+      <aside aria-label="Navegación del chat" className="hidden h-full w-64 shrink-0 flex-col overflow-y-auto border-r border-slate-200/80 bg-slate-50/90 px-5 py-7 md:flex xl:w-72 xl:px-6">{contenido}</aside>
       <dialog ref={dialogoRef} aria-label="Menú del chat" onCancel={cerrar} onClick={(event) => { if (event.target === event.currentTarget) cerrar() }} className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none bg-transparent backdrop:bg-slate-900/35 backdrop:backdrop-blur-sm">
-        <div className="relative flex h-full w-[min(19rem,85vw)] flex-col bg-slate-50 px-5 py-7 shadow-xl">
+        <div className="relative flex h-full w-[min(19rem,85vw)] flex-col overflow-y-auto bg-slate-50 px-5 py-7 shadow-xl">
           <IconButtonUI etiqueta="Cerrar menú" onClick={cerrar} className="absolute top-6 right-2"><X size={19} /></IconButtonUI>
           {contenido}
         </div>

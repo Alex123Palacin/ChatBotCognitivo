@@ -6,8 +6,10 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
-      '/api': { target: 'http://127.0.0.1:8001', changeOrigin: true, timeout: 200000, proxyTimeout: 200000 },
+      '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true, timeout: 200000, proxyTimeout: 200000 },
     },
   },
   plugins: [
