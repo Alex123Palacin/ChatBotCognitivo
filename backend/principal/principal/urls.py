@@ -4,8 +4,10 @@ from django.urls import path
 from chat import views as chat_views
 from reportes import views as reportes_views
 from usuarios import views as auth_views
+from principal.http import salud
 
 urlpatterns = [
+    path('api/salud/', salud),
     path('admin/', admin.site.urls),
     path('api/csrf/', auth_views.csrf),
     path('api/auth/registro/', auth_views.registro),

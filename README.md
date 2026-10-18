@@ -2,6 +2,18 @@
 
 Conversación académica libre con cuentas propias, un mismo historial y cuatro sesiones semanales. React muestra el chat y el panel administrativo; Django guarda los datos y controla las fechas; Ollama responde y analiza mensajes usando el modelo local `deepseek-r1:8b`.
 
+## Dominio previsto
+
+El dominio principal del proyecto es **https://chatcognitivo.tech**, con acceso administrativo en **https://chatcognitivo.tech/administrador**. Django admite `chatcognitivo.tech` y `www.chatcognitivo.tech`, y confía en sus orígenes HTTPS para las operaciones con CSRF. El desarrollo local sigue funcionando con las direcciones habituales.
+
+El frontend utiliza rutas relativas `/api/`. Al publicar, el servidor debe servir la compilación `frontend/dist`, enviar `/api/` al backend y devolver `index.html` para las rutas de React, como `/chat` y `/administrador`. El proxy de Vite solo corresponde al desarrollo.
+
+Esta configuración prepara el código; no registra el dominio ni modifica DNS. Para publicarlo falta elegir el hosting, apuntar los registros DNS a ese servicio y activar HTTPS. Si se utiliza `www`, también debe configurarse en DNS y conviene redirigirlo al dominio principal. El servidor debe poder acceder a Ollama y mantener ejecutándose el procesador semanal.
+
+El despliegue ya está definido en `docker-compose.yml`: frontend con Nginx, backend con Gunicorn, procesador semanal y Ollama. Compose utiliza `DEBUG=False`, claves privadas y almacenamiento persistente. Consulta [DESPLIEGUE.md](DESPLIEGUE.md) para publicarlo en Dokploy; `iniciar.ps1` conserva su funcionamiento local.
+
+Ejecuta `py preparar_despliegue.py` para generar `.env`. Ese archivo contiene las claves que debes copiar en **Environment** de Dokploy y está excluido de Git. El administrador utiliza `DJANGO_ADMIN_PASSWORD`. La plantilla genera una contraseña privada; en este despliegue el propietario solicitó expresamente `admin/admin`, mediante la excepción documentada en [DESPLIEGUE.md](DESPLIEGUE.md).
+
 ## Iniciar en Windows
 
 Con Ollama abierto y las dependencias ya instaladas, desde la raíz:

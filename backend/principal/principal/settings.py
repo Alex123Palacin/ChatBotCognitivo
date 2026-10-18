@@ -13,22 +13,43 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
+def variable_bool(nombre, defecto):
+    valor = os.environ.get(nombre)
+    return defecto if valor is None else valor.strip().lower() in ('true', '1', 'yes', 'on')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1-p6^3nia&@es#&jizm_rw36_wtu#@*&1j+*k%62-s%$p+8fh$'
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def variable_lista(nombre, defecto):
+    return [valor.strip() for valor in os.environ.get(nombre, defecto).split(',') if valor.strip()]
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
+# Sin variables se conserva el arranque local. Compose configura producción.
+DEBUG = variable_bool('DJANGO_DEBUG', True)
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-solo-desarrollo-local')
+if not DEBUG and (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith('django-insecure-')):
+    raise ImproperlyConfigured('Configura DJANGO_SECRET_KEY con una clave aleatoria de al menos 50 caracteres.')
+
+ALLOWED_HOSTS = variable_lista('DJANGO_ALLOWED_HOSTS', 'chatcognitivo.tech,www.chatcognitivo.tech,localhost,127.0.0.1,[::1]')
+origenes = 'https://chatcognitivo.tech,https://www.chatcognitivo.tech'
+if DEBUG:
+    origenes += ',http://localhost:5173,http://127.0.0.1:5173'
+CSRF_TRUSTED_ORIGINS = variable_lista('DJANGO_CSRF_TRUSTED_ORIGINS', origenes)
+
+SECURE_SSL_REDIRECT = variable_bool('DJANGO_SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_REDIRECT_EXEMPT = [r'^api/salud/$']
+# Solo se activa detrás del proxy privado configurado en Compose/Dokploy.
+if variable_bool('DJANGO_TRUST_PROXY_HEADERS', False):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = variable_bool('DJANGO_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = SESSION_COOKIE_SECURE
+SECURE_HSTS_SECONDS = 0 if DEBUG else 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
 
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://127.0.0.1:11434').rstrip('/')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'deepseek-r1:8b')
@@ -100,7 +121,7 @@ WSGI_APPLICATION = 'principal.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': Path(os.environ.get('DJANGO_DB_PATH', str(BASE_DIR / 'db.sqlite3'))),
         'OPTIONS': {'timeout': 20},
     }
 }
@@ -141,6 +162,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 
 # Email
@@ -148,6 +170,9 @@ STATIC_URL = 'static/'
 
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': (
+            'django.core.mail.backends.console.EmailBackend' if DEBUG
+            else 'django.core.mail.backends.smtp.EmailBackend'
+        ),
     },
 }

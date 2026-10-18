@@ -1,6 +1,7 @@
 import json
 from functools import wraps
 
+from django.db import DatabaseError, connection
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 
@@ -43,3 +44,14 @@ def acceso(metodos, administrador=False, estudiante=False, publico=False):
 @never_cache
 def csrf_fallido(request, reason=''):
     return error('La sesión de seguridad venció. Actualiza la página y vuelve a intentarlo.', 403)
+
+
+@acceso(['GET'], publico=True)
+def salud(request):
+    """Comprueba el servidor y la base sin consultar ni revelar datos personales."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+    except DatabaseError:
+        return error('La base de datos no está disponible.', 503)
+    return JsonResponse({'estado': 'ok'})
