@@ -12,7 +12,7 @@ py preparar_despliegue.py
 
 Esto crea `.env` con una clave Django y una contraseña administrativa aleatorias. Si ya existe, lo conserva sin cambiar claves. Abre el archivo y copia sus variables en **Environment** de Dokploy. No lo subas al repositorio ni lo pegues en un chat público.
 
-El usuario inicial es `admin`; la contraseña está en `DJANGO_ADMIN_PASSWORD`. La plantilla exige una contraseña propia. Al reiniciar no se restablecen las contraseñas de cuentas existentes. Para cambiar una contraseña posteriormente utiliza la terminal del backend: `python manage.py changepassword admin`.
+El usuario inicial es `admin`; la contraseña está en `DJANGO_ADMIN_PASSWORD`. La plantilla exige una contraseña propia. Al reiniciar no se restablecen las contraseñas de cuentas existentes. Para cambiar una contraseña posteriormente utiliza la terminal del backend: `python /app/manage.py changepassword admin`.
 
 Para este despliegue, el propietario eligió explícitamente conservar `admin/admin`, igual que en local. Esa excepción requiere `DJANGO_ADMIN_USERNAME=admin`, `DJANGO_ADMIN_PASSWORD=admin` y `DJANGO_ALLOW_INSECURE_ADMIN=true` en las variables privadas. El valor predeterminado de la excepción es `false`; no permite otras contraseñas débiles ni modifica cuentas existentes. Esta credencial es fácil de adivinar y permite acceder a los reportes a quien la conozca.
 
@@ -44,6 +44,8 @@ En la pestaña **Domains** de este Compose añade:
 | Certificate | Let's Encrypt |
 
 Puedes añadir `www.chatcognitivo.tech` al mismo servicio y puerto cuando su DNS esté configurado. La dirección principal sigue siendo `https://chatcognitivo.tech`.
+
+En la instancia publicada están configurados ambos dominios con HTTPS. El sistema administrativo de la aplicación está en `https://chatcognitivo.tech/administrador`. `https://admin.chatcognitivo.tech` corresponde exclusivamente al panel de Dokploy y conserva su propio acceso.
 
 El dominio debe apuntar al **frontend**, que atiende React y envía `/api/` al backend. No crees un dominio público para Ollama, el worker o el backend. No publiques el puerto 11434.
 
@@ -77,10 +79,12 @@ Recargar directamente `/chat` o `/administrador` debe mantener la pantalla graci
 En la terminal de **backend** puedes ejecutar:
 
 ```sh
-python manage.py check --deploy
+python /app/manage.py check --deploy
 ```
 
 Revisa también que `worker` permanezca ejecutándose. Los reportes necesitan ese proceso incluso cuando nadie visita el chat. La generación del reporte puede seguir pendiente mientras se analizan mensajes.
+
+La comprobación del despliegue inicial incluyó registro con una cuenta ficticia, dos respuestas reales del modelo, acceso administrativo y salud bajo HTTPS en ambos dominios. El VPS ejecuta DeepSeek en CPU: las dos respuestas de esta prueba tardaron aproximadamente 64 y 110 segundos. Son tiempos observados, no una garantía; el análisis de indicadores también se procesa en segundo plano. El primer reporte semanal se conserva al terminar los siete días de la cuenta, no inmediatamente después del registro.
 
 La base del servidor comienza vacía: no se copian usuarios ni mensajes de la base de tu computadora. El aviso de correo SMTP en la configuración no implementa envío de reportes: esa función todavía no existe.
 
