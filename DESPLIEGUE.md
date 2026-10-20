@@ -88,6 +88,8 @@ La comprobación del despliegue inicial incluyó registro con una cuenta fictici
 
 La optimización posterior entrega las respuestas por partes, reduce instrucciones e historial enviado al modelo y limita las respuestas directas a 192 tokens. También precalienta el modelo al iniciar el backend y lo mantiene cargado mediante `OLLAMA_KEEP_ALIVE=-1`. Estas mejoras se aplican al actualizar el repositorio y reconstruir los servicios: no requieren cambiar claves ni tablas. El tope de 192 también se aplica cuando Environment conserva `OLLAMA_CHAT_MAX_TOKENS=512`. Los tiempos del párrafo anterior corresponden a la versión inicial, que esperaba la respuesta completa.
 
+El Compose permite dos espacios de contexto (`OLLAMA_NUM_PARALLEL=2`) y activa `OLLAMA_MULTIUSER_CACHE=true`. Ollama puede conservar y reutilizar prefijos de solicitudes distintas al alternar entre chat y análisis; el worker mantiene su cancelación y prioridad a favor del chat. Esto utiliza más memoria de contexto, sin duplicar los pesos del modelo. Para un servidor con menos memoria se puede volver a un espacio con `OLLAMA_NUM_PARALLEL=1`. La caché no garantiza una respuesta instantánea: un contexto nuevo todavía requiere cálculo y las solicitudes simultáneas comparten CPU.
+
 La base del servidor comienza vacía: no se copian usuarios ni mensajes de la base de tu computadora. El aviso de correo SMTP en la configuración no implementa envío de reportes: esa función todavía no existe.
 
 ## 6. Datos persistentes y actualizaciones
