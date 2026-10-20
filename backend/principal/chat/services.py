@@ -1,11 +1,12 @@
 from datetime import timedelta
+from contextlib import closing
 import uuid
 
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from ml.conversacion import responder_conversacion
+from ml.conversacion import responder_conversacion, responder_conversacion_stream
 from ml.ollama import ErrorModelo
 from sesiones.models import SesionSemanal
 from sesiones.services import actualizar_semanas, iniciar_programa, sesion_json
@@ -69,7 +70,7 @@ def chat_json(usuario):
     }
 
 
-def enviar_mensaje(usuario, contenido, clave_envio):
+def _procesar_mensaje(usuario, contenido, clave_envio, en_flujo=False):
     if not isinstance(contenido, str) or not contenido.strip() or len(contenido) > 2000:
         raise ErrorChat('Escribe un mensaje de entre 1 y 2000 caracteres.')
     contenido = contenido.strip()
@@ -115,7 +116,21 @@ def enviar_mensaje(usuario, contenido, clave_envio):
     try:
         historial = historial_modelo(usuario, hasta=existente)
         historial.append({'role': 'user', 'content': existente.contenido})
-        respuesta = responder_conversacion(historial, contexto_modelo(usuario, existente.sesion))
+        contexto = contexto_modelo(usuario, existente.sesion)
+        if en_flujo:
+            partes = []
+            # Cerrar el navegador también cierra la conexión al modelo. No se
+            # guarda una respuesta parcial como si estuviera terminada.
+            with closing(responder_conversacion_stream(historial, contexto)) as flujo:
+                for fragmento in flujo:
+                    if not isinstance(fragmento, str):
+                        raise ErrorModelo('El modelo devolvió una respuesta no válida.')
+                    if fragmento:
+                        partes.append(fragmento)
+                        yield fragmento
+            respuesta = ''.join(partes)
+        else:
+            respuesta = responder_conversacion(historial, contexto)
         if not isinstance(respuesta, str) or not respuesta.strip():
             raise ErrorModelo('El modelo no devolvió una respuesta. Vuelve a intentar.')
         with transaction.atomic():
@@ -124,7 +139,20 @@ def enviar_mensaje(usuario, contenido, clave_envio):
                 raise ErrorChat('La espera venció. Reintenta tu mensaje para recuperar la respuesta.', 503)
             Mensaje.objects.get_or_create(respuesta_a=existente, defaults={'usuario': usuario, 'sesion': existente.sesion, 'contenido': respuesta.strip(), 'remitente': 'asistente', 'fecha': timezone.now(), 'analisis_estado': 'listo'})
     except ErrorModelo as exc:
-        Mensaje.objects.filter(pk=existente.pk).update(respuesta_error=str(exc))
+        Mensaje.objects.filter(pk=existente.pk, usuario__perfil__respuesta_token=token).update(respuesta_error=str(exc))
         raise ErrorChat(str(exc), 503) from exc
+    except GeneratorExit:
+        Mensaje.objects.filter(pk=existente.pk, usuario__perfil__respuesta_token=token).update(respuesta_error='La conexión se interrumpió. Puedes reintentar el mensaje.')
+        raise
     finally:
         Perfil.objects.filter(pk=perfil.pk, respuesta_token=token).update(respuesta_hasta=None, respuesta_token='')
+
+
+def enviar_mensaje(usuario, contenido, clave_envio):
+    # Conserva la API JSON anterior y las mismas reglas de persistencia.
+    for _ in _procesar_mensaje(usuario, contenido, clave_envio):
+        pass
+
+
+def enviar_mensaje_flujo(usuario, contenido, clave_envio):
+    return _procesar_mensaje(usuario, contenido, clave_envio, en_flujo=True)

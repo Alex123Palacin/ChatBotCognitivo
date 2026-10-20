@@ -9,7 +9,7 @@ import { useChatbot } from '../hooks/useChatbot'
 
 function ChatbotPage() {
   const { chat, mensajes, texto, setTexto, enviarMensaje, recargarChat,
-    finConversacionRef, entradaRef, cargando, cargandoHistorial, error, reintento } = useChatbot()
+    finConversacionRef, entradaRef, cargando, cargandoHistorial, respuestaParcial, error, reintento } = useChatbot()
   const [menuAbierto, setMenuAbierto] = useState(false)
 
   return (
@@ -35,8 +35,9 @@ function ChatbotPage() {
                     <MensajeChatComp mensaje={mensaje} />
                   </div>
                 ))}
+                {respuestaParcial?.contenido && <MensajeChatComp mensaje={respuestaParcial} />}
               </div>
-              {cargando && <EstadoEscribiendoComp />}
+              {cargando && !respuestaParcial?.contenido && <EstadoEscribiendoComp />}
             </div>
           )}
           <div ref={finConversacionRef} />

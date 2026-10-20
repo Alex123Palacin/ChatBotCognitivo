@@ -16,7 +16,8 @@ x-backend: &backend
     OLLAMA_MODEL: ${OLLAMA_MODEL:-deepseek-r1:8b}
     OLLAMA_NUM_GPU: ${OLLAMA_NUM_GPU:-0}
     OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
-    OLLAMA_CHAT_MAX_TOKENS: ${OLLAMA_CHAT_MAX_TOKENS:-512}
+    OLLAMA_CHAT_MAX_TOKENS: ${OLLAMA_CHAT_MAX_TOKENS:-192}
+    OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
   volumes:
     - datos:/data
     - estaticos:/app/staticfiles
@@ -74,6 +75,9 @@ services:
     image: ollama/ollama:0.18.2
     profiles: ["ollama"]
     restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:--1}
+      OLLAMA_NUM_PARALLEL: "1"
     volumes:
       - modelos:/root/.ollama
     networks:

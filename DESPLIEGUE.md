@@ -86,6 +86,8 @@ Revisa también que `worker` permanezca ejecutándose. Los reportes necesitan es
 
 La comprobación del despliegue inicial incluyó registro con una cuenta ficticia, dos respuestas reales del modelo, acceso administrativo y salud bajo HTTPS en ambos dominios. El VPS ejecuta DeepSeek en CPU: las dos respuestas de esta prueba tardaron aproximadamente 64 y 110 segundos. Son tiempos observados, no una garantía; el análisis de indicadores también se procesa en segundo plano. El primer reporte semanal se conserva al terminar los siete días de la cuenta, no inmediatamente después del registro.
 
+La optimización posterior entrega las respuestas por partes, reduce instrucciones e historial enviado al modelo y limita las respuestas directas a 192 tokens. También precalienta el modelo al iniciar el backend y lo mantiene cargado mediante `OLLAMA_KEEP_ALIVE=-1`. Estas mejoras se aplican al actualizar el repositorio y reconstruir los servicios: no requieren cambiar claves ni tablas. El tope de 192 también se aplica cuando Environment conserva `OLLAMA_CHAT_MAX_TOKENS=512`. Los tiempos del párrafo anterior corresponden a la versión inicial, que esperaba la respuesta completa.
+
 La base del servidor comienza vacía: no se copian usuarios ni mensajes de la base de tu computadora. El aviso de correo SMTP en la configuración no implementa envío de reportes: esa función todavía no existe.
 
 ## 6. Datos persistentes y actualizaciones

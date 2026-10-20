@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { enviarMensajeChat, obtenerChat } from '../src/api/chatbotApi.ts'
+import { enviarMensajeChat, enviarMensajeChatFlujo, obtenerChat } from '../src/api/chatbotApi.ts'
 
 const fetchOriginal = globalThis.fetch
 const ventanaOriginal = globalThis.window
@@ -86,4 +86,117 @@ test('comprueba cambios de rol al leer el chat sin confundir un POST rechazado p
   eventos.length = 0
   await assert.rejects(enviarMensajeChat(solicitud, new AbortController().signal), /Acceso rechazado/)
   assert.deepEqual(eventos, [])
+})
+
+const codificador = new TextEncoder()
+const evento = (datos) => `${JSON.stringify(datos)}\n`
+const respuestaFlujo = (texto) => new Response(new ReadableStream({
+  start(controlador) {
+    // Divide también dentro de letras UTF-8, sin depender de los límites de red.
+    const bytes = codificador.encode(texto)
+    for (let indice = 0; indice < bytes.length; indice += 3) controlador.enqueue(bytes.slice(indice, indice + 3))
+    controlador.close()
+  },
+}), { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' } })
+
+test('muestra fragmentos antes del estado final y conserva su orden, espacios y acentos', async () => {
+  let controlador
+  const fragmentos = []
+  let recibirPrimerTexto
+  const primerTexto = new Promise((resolve) => { recibirPrimerTexto = resolve })
+  const cuerpos = []
+  globalThis.fetch = async (url, opciones) => {
+    if (url === '/api/csrf/') return json({ csrfToken: 'token' })
+    assert.equal(url, '/api/chat/flujo/')
+    assert.equal(opciones.credentials, 'same-origin')
+    assert.equal(opciones.headers['X-CSRFToken'], 'token')
+    cuerpos.push(JSON.parse(opciones.body))
+    return new Response(new ReadableStream({
+      start(actual) {
+        controlador = actual
+        actual.enqueue(codificador.encode(`\n${evento({ tipo: 'inicio' })}${evento({ tipo: 'fragmento', contenido: 'Hola, ' })}`))
+      },
+    }), { headers: { 'Content-Type': 'application/x-ndjson' } })
+  }
+  let completado = false
+  const resultado = enviarMensajeChatFlujo(solicitud, new AbortController().signal, (texto) => {
+    fragmentos.push(texto)
+    recibirPrimerTexto()
+  }).then((chat) => { completado = true; return chat })
+  await primerTexto
+  assert.deepEqual(fragmentos, ['Hola, '])
+  assert.equal(completado, false, 'el texto aparece sin esperar a que termine la IA')
+  controlador.enqueue(codificador.encode(evento({ tipo: 'fragmento', contenido: '¿cómo va tu colegio? 💙' })))
+  controlador.enqueue(codificador.encode(evento({ tipo: 'estado', chat: estado })))
+  controlador.close()
+  assert.deepEqual(await resultado, estado)
+  assert.equal(fragmentos.join(''), 'Hola, ¿cómo va tu colegio? 💙')
+  assert.deepEqual(cuerpos, [solicitud])
+})
+
+test('reconstruye líneas cortadas y UTF-8, ignora metadatos y admite estado final sin salto de línea', async () => {
+  const fragmentos = []
+  globalThis.fetch = async (url) => url === '/api/csrf/'
+    ? json({ csrfToken: 'token' })
+    : respuestaFlujo(`\r\n${evento({ tipo: 'inicio' })}${evento({ tipo: 'razonamiento', contenido: 'No mostrar' })}${evento({ tipo: 'fragmento', contenido: 'Mañana en el colegio 💙' })}${JSON.stringify({ tipo: 'estado', chat: estado })}`)
+  assert.deepEqual(await enviarMensajeChatFlujo(solicitud, new AbortController().signal, (texto) => fragmentos.push(texto)), estado)
+  assert.deepEqual(fragmentos, ['Mañana en el colegio 💙'])
+})
+
+test('propaga errores durante el flujo y conserva la misma clave al reintentar', async () => {
+  const cuerpos = []
+  const fragmentos = []
+  let token = 0
+  globalThis.fetch = async (url, opciones) => {
+    if (url === '/api/csrf/') return json({ csrfToken: `token-${++token}` })
+    assert.equal(opciones.headers['X-CSRFToken'], `token-${token}`)
+    cuerpos.push(JSON.parse(opciones.body))
+    return respuestaFlujo(evento({ tipo: 'fragmento', contenido: 'Hola' }) + evento({ tipo: 'error', error: 'Ollama no está disponible.' }))
+  }
+  for (let intento = 0; intento < 2; intento += 1) {
+    await assert.rejects(enviarMensajeChatFlujo(solicitud, new AbortController().signal, (texto) => fragmentos.push(texto)), /Ollama no está disponible/)
+  }
+  assert.deepEqual(cuerpos, [solicitud, solicitud])
+  assert.deepEqual(fragmentos, ['Hola', 'Hola'])
+})
+
+test('rechaza un flujo interrumpido, un evento inválido y un servidor que devuelve HTML', async () => {
+  const respuestas = [
+    respuestaFlujo(evento({ tipo: 'fragmento', contenido: 'Hola' })),
+    respuestaFlujo('{no es json}\n'),
+    respuestaFlujo(evento({ tipo: 'fragmento', contenido: 42 })),
+    respuestaFlujo(evento({ tipo: 'estado', chat: { ...estado, mensajes: [{}] } })),
+    new Response('<html>Otro proyecto</html>', { headers: { 'Content-Type': 'text/html' } }),
+  ]
+  globalThis.fetch = async (url) => url === '/api/csrf/' ? json({ csrfToken: 'token' }) : respuestas.shift()
+  for (let intento = 0; intento < 5; intento += 1) {
+    await assert.rejects(enviarMensajeChatFlujo(solicitud, new AbortController().signal, () => undefined), /interrumpió|incompleta|no válid/)
+  }
+})
+
+test('el flujo avisa al caducar la sesión y no confunde un rechazo CSRF con un cambio de rol', async () => {
+  const eventos = []
+  let status = 401
+  globalThis.window = { dispatchEvent: (actual) => eventos.push(actual.type) }
+  globalThis.fetch = async (url) => url === '/api/csrf/' ? json({ csrfToken: 'token' }) : json({ error: 'Acceso rechazado.' }, status)
+  await assert.rejects(enviarMensajeChatFlujo(solicitud, new AbortController().signal, () => undefined), /Acceso rechazado/)
+  assert.deepEqual(eventos, ['sesion-caducada'])
+  eventos.length = 0
+  status = 403
+  await assert.rejects(enviarMensajeChatFlujo(solicitud, new AbortController().signal, () => undefined), /Acceso rechazado/)
+  assert.deepEqual(eventos, [])
+})
+
+test('cancelar una respuesta detiene su lectura y libera la conexión', async () => {
+  const controlador = new AbortController()
+  let cancelado = false
+  globalThis.fetch = async (url) => url === '/api/csrf/' ? json({ csrfToken: 'token' })
+    : new Response(new ReadableStream({
+      start(actual) {
+        actual.enqueue(codificador.encode(evento({ tipo: 'fragmento', contenido: 'Hola' }) + evento({ tipo: 'estado', chat: estado })))
+      },
+      cancel() { cancelado = true },
+    }), { headers: { 'Content-Type': 'application/x-ndjson' } })
+  await assert.rejects(enviarMensajeChatFlujo(solicitud, controlador.signal, () => controlador.abort()), { name: 'AbortError' })
+  assert.equal(cancelado, true)
 })

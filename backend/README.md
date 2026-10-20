@@ -85,6 +85,7 @@ El cuestionario de 14 preguntas fue eliminado. Esta versión **no aplica SISCO n
 | GET | `/api/auth/me/` | Usuario actual o null. |
 | GET | `/api/chat/` | Historial, semanas y respuesta pendiente del propio alumno. |
 | POST | `/api/chat/` | `mensaje` y `clave_envio` UUID. |
+| POST | `/api/chat/flujo/` | Mismos datos; devuelve NDJSON con fragmentos y estado final. |
 | GET | `/api/admin/alumnos/` | Estudiantes y actividad reciente. |
 | GET | `/api/admin/alumnos/<id>/` | Alumno, métricas, cuatro semanas, reporte provisional y reportes acumulados. |
 | GET | `/api/admin/reportes/<id>/` | Reporte con evidencias y conclusiones. |
@@ -95,13 +96,17 @@ El cuestionario de 14 preguntas fue eliminado. Esta versión **no aplica SISCO n
 
 Se usa `deepseek-r1:8b` ya descargado. No se modificaron sus pesos, no hubo fine-tuning, no se entrenó con el PDF y no se incorporó un dataset. Las instrucciones y los indicadores son contexto de inferencia.
 
-Variables opcionales: `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_GPU`, `OLLAMA_NUM_CTX`, `OLLAMA_ANALYSIS_TIMEOUT`, `OLLAMA_CHAT_DIRECT` y `OLLAMA_CHAT_MAX_TOKENS`. La configuración local usa 16 capas de GPU y contexto de 4096 tokens para compartir memoria con otras aplicaciones; si hay mucha carga, la respuesta puede tardar. Algunas versiones de DeepSeek continúan razonando internamente aunque se solicite `think:false`; ese texto no llega al estudiante.
+Variables opcionales: `OLLAMA_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_GPU`, `OLLAMA_NUM_CTX`, `OLLAMA_ANALYSIS_TIMEOUT`, `OLLAMA_CHAT_DIRECT`, `OLLAMA_CHAT_MAX_TOKENS` y `OLLAMA_KEEP_ALIVE`. La configuración local usa 16 capas de GPU y contexto de 4096 tokens; Compose usa CPU. Algunas versiones de DeepSeek continúan razonando internamente aunque se solicite `think:false`; por eso se conserva la plantilla directa comprobada.
 
 El chat tiene 180 segundos de espera; el análisis en segundo plano dispone de 360 segundos. Si un estudiante envía un mensaje durante una inferencia analítica, el procesador cierra esa conexión para ceder el modelo al chat y reintenta el análisis después. Esta prioridad se aplica a todos los estudiantes que comparten el modelo, no solo al dueño del mensaje analizado.
 
-El analizador y la conversación usan por defecto salida directa mediante [la API `/api/generate` de Ollama](https://docs.ollama.com/api/generate), con la plantilla verificada del `deepseek-r1:8b` instalado. La plantilla conserva todas las instrucciones y los turnos recientes seleccionados; inicia la respuesta después de un bloque de pensamiento vacío para reducir la espera. El chat dispone de hasta 512 tokens de salida y conserva la comprobación de respuesta completa. No se entrega un mensaje cortado como si estuviera terminado.
+El analizador y la conversación usan por defecto salida directa mediante [la API `/api/generate` de Ollama](https://docs.ollama.com/api/generate), con la plantilla verificada del `deepseek-r1:8b` instalado. La plantilla inicia la respuesta después de un bloque de pensamiento vacío. El chat envía instrucciones escolares compactas y hasta ocho mensajes recientes, conservando íntegro el último mensaje. Su presupuesto directo es como máximo 192 tokens, aunque las variables antiguas contengan 512; puede configurarse un límite inferior. Las etiquetas de pensamiento y el campo `thinking` no forman parte del mensaje visible. Una respuesta incompleta no se guarda como terminada.
 
-Puedes establecer `OLLAMA_CHAT_DIRECT=false` para restaurar `/api/chat` con su presupuesto nativo de 1800 tokens, o `OLLAMA_ANALYSIS_DIRECT=false` para usar el modo nativo en el análisis. Los ejemplos de las instrucciones ayudan a clasificar, pero no entrenan los pesos. El analizador mantiene su esquema por indicador y las observaciones a partir de citas validadas. La comparación del mismo mensaje académico con 16 capas de GPU pasó de 63,23 segundos nativos a 8,26 segundos directos; se comprobaron además saludo, continuidad y cambio de tema. Estos pocos casos verifican funcionamiento, sin establecer una precisión general ni tiempos garantizados.
+`/api/chat/flujo/` transmite eventos `inicio`, `fragmento`, `estado` y `error` como líneas JSON. Comparte autenticación, CSRF, reserva por estudiante, prioridad sobre el worker e idempotencia con `/api/chat/`. Al desconectarse el consumidor se cierra Ollama y se libera la reserva; el mensaje del alumno permite un reintento con la misma clave. El frontend muestra el texto parcial y lo sustituye por el historial guardado cuando llega `estado`.
+
+`precalentar_modelo` carga el modelo y procesa un token de las instrucciones comunes antes de iniciar Gunicorn; esa salida se descarta y no crea usuarios ni mensajes. En desarrollo se ejecuta en segundo plano al iniciar `runserver`. El valor predeterminado `OLLAMA_KEEP_ALIVE=-1` evita descargar el modelo de memoria durante las pausas. Se envía como número a la API para ser compatible con Ollama 0.18.2. Consulta la [documentación de precarga y keep_alive](https://docs.ollama.com/faq).
+
+Puedes establecer `OLLAMA_CHAT_DIRECT=false` para restaurar `/api/chat` de Ollama con su presupuesto nativo de 1800 tokens, o `OLLAMA_ANALYSIS_DIRECT=false` para usar el modo nativo en el análisis. Los ejemplos ayudan a clasificar, pero no entrenan los pesos. El analizador mantiene su esquema y citas validadas. Mostrar texto progresivamente reduce la espera hasta ver la respuesta; la duración completa sigue dependiendo de la longitud, el modelo y el hardware.
 
 La extracción utiliza el campo `format` de [las salidas estructuradas oficiales de Ollama](https://docs.ollama.com/capabilities/structured-outputs). Django valida nuevamente la cita y el indicador antes de guardar.
 

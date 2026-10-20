@@ -57,7 +57,9 @@ OLLAMA_TIMEOUT = 180
 OLLAMA_ANALYSIS_TIMEOUT = int(os.environ.get('OLLAMA_ANALYSIS_TIMEOUT', '360'))
 OLLAMA_ANALYSIS_DIRECT = os.environ.get('OLLAMA_ANALYSIS_DIRECT', 'true').strip().lower() not in ('false', '0', 'no', 'off')
 OLLAMA_CHAT_DIRECT = os.environ.get('OLLAMA_CHAT_DIRECT', 'true').strip().lower() not in ('false', '0', 'no', 'off')
-OLLAMA_CHAT_MAX_TOKENS = int(os.environ.get('OLLAMA_CHAT_MAX_TOKENS', '512'))
+OLLAMA_CHAT_MAX_TOKENS = int(os.environ.get('OLLAMA_CHAT_MAX_TOKENS', '192'))
+# Mantiene el modelo cargado entre conversaciones, incluso tras pausas largas.
+OLLAMA_KEEP_ALIVE = os.environ.get('OLLAMA_KEEP_ALIVE', '-1')
 OLLAMA_NUM_GPU = int(os.environ.get('OLLAMA_NUM_GPU', '16'))
 OLLAMA_NUM_CTX = int(os.environ.get('OLLAMA_NUM_CTX', '4096'))
 

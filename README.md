@@ -1,6 +1,6 @@
 # Chatbot Cognitivo
 
-Conversación académica libre con cuentas propias, un mismo historial y cuatro sesiones semanales. React muestra el chat y el panel administrativo; Django guarda los datos y controla las fechas; Ollama responde y analiza mensajes usando el modelo local `deepseek-r1:8b`.
+Conversación escolar libre con cuentas propias, un mismo historial y cuatro sesiones semanales. React muestra el chat y el panel administrativo; Django guarda los datos y controla las fechas; Ollama responde y analiza mensajes usando el modelo local `deepseek-r1:8b`.
 
 ## Dominio previsto
 
@@ -79,7 +79,11 @@ Los reportes muestran evidencia de dificultades, recursos de afrontamiento o neg
 
 No se entrenaron los pesos del modelo, no se hizo fine-tuning y no hay un conjunto de entrenamiento nuevo. Se usa tu modelo descargado con instrucciones para conversar y un esquema JSON para extraer evidencia. La salida estructurada facilita validar el formato, pero no garantiza que todas las interpretaciones sean correctas. También puede omitir menciones: en una prueba no extrajo dos negaciones explícitas de síntomas; esos indicadores quedaron sin información, sin atribuirles estrés bajo.
 
-El chat usa un modo directo del mismo modelo para evitar la demora del razonamiento previo, manteniendo las instrucciones y los turnos recientes. En una comparación local, el mismo mensaje académico pasó de 63,23 a 8,26 segundos; las otras pruebas tardaron entre 2,41 y 10,03 segundos. Son tiempos observados, no una garantía: cambian según la carga del equipo y el contexto. El análisis de evidencia sigue ejecutándose por separado. `OLLAMA_CHAT_DIRECT=false` restaura la conversación nativa.
+El chatbot sitúa la conversación en el colegio y ajusta el vocabulario de sus propias respuestas al contexto escolar. No modifica las palabras del estudiante ni las citas que sustentan los reportes.
+
+El chat entrega texto progresivamente mediante `/api/chat/flujo/`: las palabras aparecen mientras se generan. Los saludos y cortesías aislados se resuelven directamente; cualquier relato o malestar pasa al modelo. Las instrucciones son más breves, se envían hasta ocho mensajes recientes y las respuestas directas tienen un máximo de 192 tokens, incluso si una instalación anterior conserva el valor 512 en sus variables. La base sigue guardando toda la conversación y solo conserva una respuesta del asistente cuando termina correctamente.
+
+Se precalientan los pesos y las instrucciones escolares al arrancar. `OLLAMA_KEEP_ALIVE=-1` mantiene el modelo en memoria entre conversaciones; puede cambiarse por una duración como `10m`. Se conserva el modo directo del mismo DeepSeek para evitar su razonamiento previo, así como la prioridad del chat sobre el análisis de evidencia. Los tiempos dependen del servidor: un modelo de 8B en CPU no permite garantizar respuestas completas instantáneas para cualquier mensaje. `OLLAMA_CHAT_DIRECT=false` restaura la conversación nativa, que puede ser más lenta.
 
 ## Organización y comprobaciones
 

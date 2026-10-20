@@ -33,6 +33,16 @@ async function obtenerCsrf(signal: AbortSignal): Promise<string> {
 }
 
 export async function peticionApi<T>(ruta: string, opciones: OpcionesApi = {}): Promise<T> {
+  return peticionFlujoApi(ruta, opciones, async (respuesta) => {
+    const datos = await respuesta.json().catch(() => null)
+    if (datos === null) throw new ErrorApi('Django devolvió una respuesta no válida.', respuesta.status)
+    return datos as T
+  })
+}
+
+// Comparte conexión, CSRF y control de sesión con las respuestas que llegan por partes.
+export async function peticionFlujoApi<T>(ruta: string, opciones: OpcionesApi,
+  leerRespuesta: (respuesta: Response) => Promise<T>): Promise<T> {
   const limite = AbortSignal.timeout(opciones.timeout ?? 15_000)
   const signal = opciones.signal ? AbortSignal.any([opciones.signal, limite]) : limite
   const method = opciones.method ?? 'GET'
@@ -47,8 +57,8 @@ export async function peticionApi<T>(ruta: string, opciones: OpcionesApi = {}): 
       method, headers, credentials: 'same-origin', signal,
       ...(opciones.body === undefined ? {} : { body: JSON.stringify(opciones.body) }),
     })
-    const datos = await respuesta.json().catch(() => null)
     if (!respuesta.ok) {
+      const datos = await respuesta.json().catch(() => null)
       if (respuesta.status === 401 && !signal.aborted && !ruta.includes('/auth/login/') && typeof window !== 'undefined') {
         window.dispatchEvent(new Event('sesion-caducada'))
       }
@@ -58,8 +68,7 @@ export async function peticionApi<T>(ruta: string, opciones: OpcionesApi = {}): 
       }
       throw new ErrorApi(typeof datos?.error === 'string' ? datos.error : 'El servidor no pudo completar la solicitud.', respuesta.status)
     }
-    if (datos === null) throw new ErrorApi('Django devolvió una respuesta no válida.', respuesta.status)
-    return datos as T
+    return await leerRespuesta(respuesta)
   } catch (error) {
     if (opciones.signal?.aborted) throw error
     if (limite.aborted) throw new ErrorApi('El servidor está tardando demasiado. Intenta nuevamente.')

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { enviarMensajeChat, obtenerChat } from '../api/chatbotApi'
-import type { EstadoChat, SolicitudChat } from '../types/chatbot'
+import { enviarMensajeChatFlujo, obtenerChat } from '../api/chatbotApi'
+import type { EstadoChat, MensajeChat, SolicitudChat } from '../types/chatbot'
 
 export function useChatbot() {
   const [chat, setChat] = useState<EstadoChat | null>(null)
   const [texto, setTexto] = useState('')
   const [cargandoHistorial, setCargandoHistorial] = useState(true)
   const [enviando, setEnviando] = useState(false)
+  const [respuestaParcial, setRespuestaParcial] = useState<MensajeChat | null>(null)
   const [error, setError] = useState('')
   const [reintento, setReintento] = useState<SolicitudChat | null>(null)
   const peticion = useRef<AbortController | null>(null)
@@ -86,7 +87,7 @@ export function useChatbot() {
   const ultimoId = mensajes.at(-1)?.id
   useEffect(() => {
     finConversacionRef.current?.scrollIntoView({ block: 'end' })
-  }, [ultimoId, cargando])
+  }, [ultimoId, cargando, respuestaParcial?.contenido])
 
   async function enviarMensaje(repetir = false) {
     if (!chat || (chat.programa_finalizado && !repetir) || cargando || peticion.current || (reintento && !repetir)) return
@@ -100,6 +101,7 @@ export function useChatbot() {
     revision.current += 1
     peticion.current = controlador
     setEnviando(true)
+    setRespuestaParcial(null)
     setError('')
     ultimoEnvio.current = solicitud
     setReintento(solicitud)
@@ -111,7 +113,14 @@ export function useChatbot() {
       }] }))
     }
     try {
-      const estado = await enviarMensajeChat(solicitud, controlador.signal)
+      const estado = await enviarMensajeChatFlujo(solicitud, controlador.signal, (contenido) => {
+        if (!montado.current || controlador.signal.aborted || peticion.current !== controlador) return
+        setRespuestaParcial((actual) => ({
+          id: `respuesta-${solicitud.clave_envio}`, contenido: (actual?.contenido ?? '') + contenido,
+          remitente: 'asistente', fecha: actual?.fecha ?? new Date().toISOString(),
+          sesion_numero: chat.sesion_actual?.numero ?? chat.mensajes.at(-1)?.sesion_numero ?? 1,
+        }))
+      })
       if (!montado.current || controlador.signal.aborted) return
       actualizarEstado(estado)
     } catch (fallo) {
@@ -128,6 +137,7 @@ export function useChatbot() {
       if (peticion.current === controlador) {
         peticion.current = null
         if (montado.current) {
+          setRespuestaParcial(null)
           setEnviando(false)
           entradaRef.current?.focus({ preventScroll: true })
         }
@@ -150,5 +160,5 @@ export function useChatbot() {
   }
 
   return { chat, mensajes, texto, setTexto, enviarMensaje, recargarChat,
-    cargando, cargandoHistorial, error, reintento, finConversacionRef, entradaRef }
+    cargando, cargandoHistorial, respuestaParcial, error, reintento, finConversacionRef, entradaRef }
 }

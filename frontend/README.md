@@ -66,7 +66,7 @@ Las rutas se protegen en React para organizar la navegación. Django también co
 
 El historial pertenece a la cuenta y se recupera al recargar o iniciar sesión otra vez. Ya no hay nuevo chat, limpiar conversación, cuestionario, opciones de respuesta ni resultados numéricos. Las semanas se separan visualmente dentro del mismo historial.
 
-El frontend muestra tres puntos mientras responde la IA. Si una petición falla, recupera lo guardado y permite reintentar la misma clave sin duplicar mensajes. También descarta lecturas antiguas que podrían reemplazar una respuesta nueva.
+El frontend muestra tres puntos hasta recibir el primer texto y después presenta la respuesta progresivamente en la misma burbuja mediante `/api/chat/flujo/`. El historial definitivo sustituye el texto parcial al terminar. Si una petición falla, recupera lo guardado y permite reintentar la misma clave sin duplicar mensajes. Las lecturas periódicas no sobrescriben el envío en curso.
 
 El panel se actualiza cada 30 segundos. Al seleccionar un estudiante muestra su reporte provisional de la semana vigente, con avisos sobre análisis pendiente y cobertura de los siete indicadores; conserva debajo los reportes semanales acumulados. Separa citas del estudiante de interpretaciones de IA y no convierte duración, mensajes ni conteos de evidencias en niveles de estrés. La actividad reciente refleja los últimos cinco minutos, no una conexión permanente comprobada. El acceso local del administrador usa `admin/admin`; los estudiantes conservan su pantalla de Gmail.
 
