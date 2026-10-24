@@ -175,3 +175,8 @@ $RECYCLE.BIN/
 
 # Se versionan el codigo, las migraciones Django y los lockfiles
 # (package-lock.json, yarn.lock, pnpm-lock.yaml, poetry.lock, uv.lock).
+
+# Archivos publicos necesarios para iniciar el proyecto en otro Windows
+!/iniciar.ps1
+!/iniciar.bat
+!/LEEME_LOCAL.md

@@ -16,13 +16,17 @@ Ejecuta `py preparar_despliegue.py` para generar `.env`. Ese archivo contiene la
 
 ## Iniciar en Windows
 
-Con Ollama abierto y las dependencias ya instaladas, desde la raíz:
+Para entregar el proyecto a otra persona, consulta [LEEME_LOCAL.md](LEEME_LOCAL.md). Después de instalar una vez Python, Node.js y Ollama, basta con **hacer doble clic en `iniciar.bat`** desde la carpeta principal.
+
+El inicio crea el entorno Python si falta, instala las dependencias, inicia Ollama si no estaba abierto, descarga `deepseek-r1:8b` si hace falta, prepara la base local y abre el navegador cuando la interfaz puede comunicarse con Django. La primera preparación necesita Internet y la descarga del modelo puede tardar varios minutos. No requiere copiar `.env` ni datos del VPS.
+
+También puedes iniciarlo desde PowerShell:
 
 ```powershell
 .\iniciar.ps1
 ```
 
-Abre **http://localhost:5173**. El script aplica las migraciones, inicia Django junto al procesador de semanas y ejecuta Vite. Conserva esa terminal abierta. `Ctrl+C` detiene los procesos que inició. Los registros del backend están en `logs/` y no se suben a Git.
+El navegador se abre en **http://localhost:5173**. Conserva la ventana de inicio abierta y **presiona ENTER en ella para apagar el programa**. Se detienen únicamente los procesos que inició esa ventana; se conserva Ollama si ya estaba abierto. Los registros quedan en `logs/` y no se suben a Git. `iniciar.ps1 -Verificar` comprueba el arranque completo y apaga los servicios sin abrir el navegador.
 
 También puedes usar dos terminales:
 
@@ -39,7 +43,7 @@ npm run dev
 
 `iniciar_backend` inicia el servidor en `127.0.0.1:8000` y el procesador automático. `runserver` por sí solo sirve la API, pero necesita que ejecutes aparte `manage.py procesar_semanas --continuo` para analizar y cerrar semanas. El cierre no depende de que el estudiante vuelva a entrar.
 
-Si faltan dependencias, desde `backend`: `py -m venv .venv` y `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`; desde `frontend`: `npm install`. No necesitas descargar otro modelo.
+El iniciador prepara las dependencias automáticamente. Para una instalación manual, desde `backend`: `py -m venv .venv` y `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`; desde `frontend`: `npm ci`; en Ollama: `ollama pull deepseek-r1:8b` si el modelo no estaba descargado.
 
 ## Estudiantes y administrador
 
