@@ -76,7 +76,7 @@ try {
         }
     }
     $node = BuscarPrograma 'node.exe' @((Join-Path $env:ProgramFiles 'nodejs\node.exe'))
-    if (-not $node) { throw 'Falta Node.js. Instala Node.js 24 LTS segun LEEME_LOCAL.md y vuelve a abrir iniciar.bat.' }
+    if (-not $node) { throw 'Falta Node.js. Instala Node.js 24 LTS y vuelve a abrir iniciar.bat.' }
     $versionNode = [version]((& $node --version).Trim().TrimStart('v'))
     if (-not (($versionNode.Major -eq 20 -and $versionNode.Minor -ge 19) -or $versionNode -ge [version]'22.12.0')) {
         throw 'Node.js es antiguo. Instala Node.js 24 LTS y vuelve a iniciar.'
@@ -102,7 +102,7 @@ try {
                 }
             } catch { }
         }
-        if (-not $pythonSistema) { throw 'Falta Python 3.12 o superior. Instala Python 3.14 segun LEEME_LOCAL.md.' }
+        if (-not $pythonSistema) { throw 'Falta Python 3.12 o superior. Instala Python 3.14 y vuelve a abrir iniciar.bat.' }
         & $pythonSistema @argumentosPython -m venv (Join-Path $raizProyecto 'backend\.venv')
         if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el entorno Python del proyecto.' }
     }
@@ -127,7 +127,7 @@ try {
     $modelos = $null
     try { $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 } catch { }
     if ($null -eq $modelos) {
-        if (-not $ollama) { throw 'Falta Ollama. Instalalo segun LEEME_LOCAL.md y vuelve a abrir iniciar.bat.' }
+        if (-not $ollama) { throw 'Falta Ollama. Instalalo y vuelve a abrir iniciar.bat.' }
         Write-Host 'Iniciando Ollama; la deteccion del equipo puede tardar un momento...'
         $servicioOllama = RegistrarProceso (Start-Process -FilePath $ollama -ArgumentList 'serve' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $carpetaLogs 'ollama.log') -RedirectStandardError (Join-Path $carpetaLogs 'ollama-error.log'))
         EsperarServicio 'http://127.0.0.1:11434/api/tags' 'models' '' $servicioOllama 180
@@ -175,7 +175,7 @@ try {
     $codigoSalidaProyecto = 1
     Write-Host ''
     Write-Host ('No se pudo iniciar: ' + $_.Exception.Message) -ForegroundColor Red
-    Write-Host 'Consulta LEEME_LOCAL.md. Los detalles de los servicios quedan en logs/.'
+    Write-Host 'Los detalles de los servicios quedan en logs/.'
 } finally {
     for ($indice = $procesosProyecto.Count - 1; $indice -ge 0; $indice--) {
         $registro = $procesosProyecto[$indice]

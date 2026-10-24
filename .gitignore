@@ -179,4 +179,3 @@ $RECYCLE.BIN/
 # Archivos publicos necesarios para iniciar el proyecto en otro Windows
 !/iniciar.ps1
 !/iniciar.bat
-!/LEEME_LOCAL.md
