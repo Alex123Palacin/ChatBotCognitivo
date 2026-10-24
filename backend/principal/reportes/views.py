@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.db.models import Count, Min, Max, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -10,7 +10,7 @@ from principal.http import acceso, error
 from sesiones.models import SesionSemanal
 from sesiones.services import sesion_json
 from .models import ReporteSemanal
-from .services import dimensiones_json, resumen_json, reporte_actual_json
+from .services import NOTA_METODO, dimensiones_json, resumen_json, reporte_actual_json
 
 User = get_user_model()
 
@@ -49,4 +49,21 @@ def reporte(request, reporte_id):
     reporte = ReporteSemanal.objects.filter(pk=reporte_id).select_related('sesion__usuario__perfil').first()
     if not reporte:
         return error('No se encontró el reporte.', 404)
-    return JsonResponse({**resumen_json(reporte), 'nota': reporte.nota, 'alumno': alumno_json(reporte.sesion.usuario), 'dimensiones': dimensiones_json(reporte)})
+    return JsonResponse({**resumen_json(reporte), 'nota': NOTA_METODO, 'alumno': alumno_json(reporte.sesion.usuario), 'dimensiones': dimensiones_json(reporte)})
+
+
+@acceso(['GET'], administrador=True)
+def exportar(request):
+    from .exportacion import crear_excel
+    valores = request.GET.get('alumnos', '').split(',')
+    if not 1 <= len(valores) <= 100 or any(not v.isascii() or not v.isdecimal() or len(v) > 10 for v in valores):
+        raise ValueError('Selecciona entre 1 y 100 estudiantes para descargar.')
+    ids = {int(v) for v in valores}
+    usuarios = list(User.objects.filter(pk__in=ids, is_staff=False, is_superuser=False).select_related('perfil').order_by('first_name', 'pk'))
+    if len(usuarios) != len(ids):
+        return error('No se encontró alguno de los estudiantes seleccionados.', 404)
+    respuesta = HttpResponse(crear_excel(usuarios), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    fecha = timezone.localdate().isoformat()
+    respuesta['Content-Disposition'] = f'attachment; filename="evaluacion-inicial-final-{fecha}.xlsx"'
+    respuesta['X-Content-Type-Options'] = 'nosniff'
+    return respuesta

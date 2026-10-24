@@ -163,6 +163,9 @@ class Carga:
                 if usuario is None:
                     usuario = get_user_model().objects.create(username=registro['email'], email=registro['email'], first_name=registro['nombre'], password=registro['password_hash'], is_active=True, is_staff=False, is_superuser=False, date_joined=datetime.fromisoformat(registro['inicio']) - timedelta(days=1))
                 perfil, _ = Perfil.objects.get_or_create(usuario=usuario)
+                if hasattr(perfil, 'origen_datos'):
+                    perfil.origen_datos = 'demostracion'
+                    perfil.save(update_fields=['origen_datos'])
                 iniciar_programa(perfil, datetime.fromisoformat(registro['inicio']))
                 actualizar_semanas(usuario)
             registro['id'] = usuario.pk

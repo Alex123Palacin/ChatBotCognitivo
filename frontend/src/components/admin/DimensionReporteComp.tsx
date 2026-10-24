@@ -29,7 +29,7 @@ function DimensionReporteComp({ dimension }: { dimension: DimensionReporte }) {
                     </div>
                     <p className="mt-3 text-xs font-medium text-slate-500">Fragmento del estudiante</p>
                     <blockquote className="mt-1 border-l-2 border-blue-200 pl-3 text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">“{evidencia.cita}”</blockquote>
-                    <p className="mt-4 text-xs font-medium text-slate-500">Interpretación de la IA</p>
+                    <p className="mt-4 text-xs font-medium text-slate-500">Observación del sistema</p>
                     <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere]">{evidencia.observacion}</p>
                   </article>
                 ))}

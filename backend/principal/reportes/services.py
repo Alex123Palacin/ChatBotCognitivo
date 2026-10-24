@@ -16,7 +16,7 @@ from .models import Evidencia, ReporteSemanal
 
 SENALES = {'dificultad', 'recurso', 'ausencia_explicita'}
 logger = logging.getLogger(__name__)
-NOTA_METODO = ('Análisis cualitativo orientativo de la conversación. Las citas pertenecen al estudiante y las observaciones son inferencias de IA. No es una puntuación SISCO ni un diagnóstico. La falta de evidencia no equivale a ausencia de estrés.')
+NOTA_METODO = ('Análisis automático orientativo basado en citas de la conversación. No es una puntuación SISCO ni un diagnóstico. La falta de evidencia no equivale a ausencia de estrés.')
 
 
 def hay_respuesta_activa(ahora=None):
@@ -186,7 +186,7 @@ def reporte_actual_json(sesion, ahora=None):
     evidencias = evidencias_sesion(sesion)
     cobertura = cobertura_conversacion(cantidad, analizados, evidencias)
     resumen = f'Semana {sesion.numero}: {cantidad} mensajes del estudiante en {dias} días de conversación; {analizados} analizados y {cantidad - analizados} pendientes. Hay {len(evidencias)} citas para {cobertura["indicadores_con_evidencia"]} de 7 indicadores.'
-    nota = NOTA_METODO + ' La cobertura indica qué temas tienen citas de respaldo, no la gravedad del estrés ni la validez de una medición. Los días y mensajes describen actividad, no minutos de conversación continua.'
+    nota = NOTA_METODO + ' La cobertura y la actividad no indican la gravedad del estrés.'
     estado = 'finalizado' if ahora >= sesion.fin else 'en_curso'
     if estado == 'en_curso':
         nota += ' Vista de la semana en curso; el reporte semanal se generará al cierre.'

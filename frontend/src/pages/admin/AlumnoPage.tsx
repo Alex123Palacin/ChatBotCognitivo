@@ -4,6 +4,7 @@ import EstadoCargaComp from '../../components/admin/EstadoCargaComp'
 import InformacionAlumnoComp from '../../components/admin/InformacionAlumnoComp'
 import ReporteActualComp from '../../components/admin/ReporteActualComp'
 import TarjetaReporteComp from '../../components/admin/TarjetaReporteComp'
+import DescargarEvaluacionComp from '../../components/admin/DescargarEvaluacionComp'
 import { useAlumno } from '../../hooks/useAlumno'
 import { formatearPeriodo } from '../../utils/fechas'
 
@@ -18,6 +19,7 @@ function AlumnoPage() {
       <EstadoCargaComp cargando={cargando} error={error} reintentar={refrescar} />
       {datos && <div className="space-y-8">
         <InformacionAlumnoComp alumno={datos.alumno} />
+        <DescargarEvaluacionComp alumnos={[datos.alumno.id]} />
         {datos.reporte_actual ? <ReporteActualComp reporte={datos.reporte_actual} /> : (
           <section className="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="text-lg font-semibold">Análisis actual de la conversación</h2>

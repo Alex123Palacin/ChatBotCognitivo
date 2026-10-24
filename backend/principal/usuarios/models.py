@@ -9,6 +9,7 @@ class Perfil(models.Model):
     conectado = models.BooleanField(default=False)
     respuesta_hasta = models.DateTimeField(null=True, blank=True)
     respuesta_token = models.CharField(max_length=36, blank=True)
+    origen_datos = models.CharField(max_length=20, default='conversacion', choices=[('conversacion', 'Interacción registrada'), ('demostracion', 'Demostración')])
 
     def __str__(self):
         return self.usuario.email

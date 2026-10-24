@@ -21,7 +21,6 @@ function ReporteAlumnoPage() {
           <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-600 [overflow-wrap:anywhere]">{datos.resumen || (datos.estado === 'pendiente' ? 'El sistema está procesando la conversación. Este reporte se actualizará automáticamente.' : 'No se dispone de información suficiente en este periodo.')}</p>
           {datos.nota && <p className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">{datos.nota}</p>}
         </section>
-        <p className="mb-5 text-xs leading-relaxed text-slate-500">Los fragmentos proceden de los mensajes del estudiante. Las interpretaciones de la IA son orientativas: no son un diagnóstico ni una puntuación del inventario SISCO. El número de mensajes o evidencias no representa un nivel de estrés.</p>
         <div className="space-y-5">{datos.dimensiones.map((dimension) => <DimensionReporteComp key={dimension.id} dimension={dimension} />)}</div>
       </>}
     </MarcoAdminComp>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import MarcoAdminComp from '../../components/admin/MarcoAdminComp'
 import EstadoCargaComp from '../../components/admin/EstadoCargaComp'
 import TablaAlumnosComp from '../../components/admin/TablaAlumnosComp'
+import DescargarEvaluacionComp from '../../components/admin/DescargarEvaluacionComp'
 import { useAlumnos } from '../../hooks/useAlumnos'
 import InputUI from '../../ui/InputUI'
 
@@ -42,6 +43,7 @@ function AdminPage() {
           <p className="text-sm text-slate-500">{visibles.length} estudiantes visibles · {soloActivos ? 'Solo actividad reciente' : 'Todos los estudiantes'}</p>
         </div>
         <TablaAlumnosComp alumnos={visibles} hayRegistrados={alumnos.length > 0} />
+        <div className="mt-6"><DescargarEvaluacionComp alumnos={visibles.map((alumno) => alumno.id)} /></div>
       </>}
     </MarcoAdminComp>
   )

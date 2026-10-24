@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test:api": "node --experimental-strip-types --test tests/chatbotApi.test.mjs tests/authApi.test.mjs",
+    "test:api": "node --experimental-strip-types --test tests/chatbotApi.test.mjs tests/authApi.test.mjs tests/exportacionApi.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

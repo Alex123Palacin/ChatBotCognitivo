@@ -17,6 +17,7 @@ urlpatterns = [
     path('api/chat/', chat_views.chat),
     path('api/chat/flujo/', chat_views.chat_flujo),
     path('api/admin/alumnos/', reportes_views.alumnos),
+    path('api/admin/evaluacion.xlsx', reportes_views.exportar),
     path('api/admin/alumnos/<int:alumno_id>/', reportes_views.alumno),
     path('api/admin/alumnos/<int:alumno_id>/reportes/', reportes_views.alumno),
     path('api/admin/reportes/<int:reporte_id>/', reportes_views.reporte),
