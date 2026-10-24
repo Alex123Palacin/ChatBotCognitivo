@@ -5,6 +5,8 @@ $carpetaBackend = Join-Path $raizProyecto 'backend\principal'
 $carpetaFrontend = Join-Path $raizProyecto 'frontend'
 $pythonProyecto = Join-Path $raizProyecto 'backend\.venv\Scripts\python.exe'
 $carpetaLogs = Join-Path $raizProyecto 'logs'
+$carpetaProgramas = Join-Path $env:LOCALAPPDATA 'ChatbotCognitivo\runtimes'
+$carpetaDescargas = Join-Path $env:LOCALAPPDATA 'ChatbotCognitivo\descargas'
 $procesosProyecto = New-Object System.Collections.ArrayList
 $variablesAnteriores = @{}
 $bloqueoProyecto = $null
@@ -52,6 +54,10 @@ try {
     try {
         $bloqueoProyecto = [System.IO.File]::Open((Join-Path $carpetaLogs 'inicio.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
     } catch { throw 'Otra ventana ya esta iniciando o ejecutando este proyecto. Revisa esa ventana.' }
+    . (Join-Path $raizProyecto 'herramientas\instalar_dependencias.ps1')
+    # TLS para las descargas oficiales; no se modifica la validacion de certificados.
+    $tlsAnteriorProyecto = [Net.ServicePointManager]::SecurityProtocol
+    [Net.ServicePointManager]::SecurityProtocol = $tlsAnteriorProyecto -bor [Net.SecurityProtocolType]::Tls12
     # Configuracion del proceso local; no lee ni modifica el .env de produccion.
     $variablesLocales = @{
         DJANGO_DEBUG = 'true'
@@ -62,6 +68,7 @@ try {
         DJANGO_TRUST_PROXY_HEADERS = 'false'
         DJANGO_DB_PATH = (Join-Path $carpetaBackend 'db.sqlite3')
         OLLAMA_URL = 'http://127.0.0.1:11434'
+        OLLAMA_HOST = '127.0.0.1:11434'
         OLLAMA_MODEL = 'deepseek-r1:8b'
         NODE_ENV = 'development'
         PYTHONIOENCODING = 'utf-8'
@@ -76,33 +83,42 @@ try {
         }
     }
     $node = BuscarPrograma 'node.exe' @((Join-Path $env:ProgramFiles 'nodejs\node.exe'))
-    if (-not $node) { throw 'Falta Node.js. Instala Node.js 24 LTS y vuelve a abrir iniciar.bat.' }
-    $versionNode = [version]((& $node --version).Trim().TrimStart('v'))
-    if (-not (($versionNode.Major -eq 20 -and $versionNode.Minor -ge 19) -or $versionNode -ge [version]'22.12.0')) {
-        throw 'Node.js es antiguo. Instala Node.js 24 LTS y vuelve a iniciar.'
+    $versionNode = [version]'0.0.0'
+    if ($node) {
+        try { $versionNode = [version]((& $node --version).Trim().TrimStart('v')) } catch { }
     }
-    $npm = BuscarPrograma 'npm.cmd' @((Join-Path (Split-Path $node) 'npm.cmd'))
-    if (-not $npm) { throw 'No se encontro npm. Reinstala Node.js con sus opciones predeterminadas.' }
+    if (-not (($versionNode.Major -eq 20 -and $versionNode.Minor -ge 19) -or $versionNode -ge [version]'22.12.0')) {
+        $node = InstalarNodeLocal
+    }
+    $npm = Join-Path (Split-Path $node) 'npm.cmd'
+    if (-not (Test-Path -LiteralPath $npm)) { $npm = BuscarPrograma 'npm.cmd' }
+    if (-not $npm) {
+        $node = InstalarNodeLocal
+        $npm = Join-Path (Split-Path $node) 'npm.cmd'
+    }
     $variablesAnteriores['PATH'] = $env:PATH
     $env:PATH = (Split-Path $node) + ';' + $env:PATH
 
-    if (-not (Test-Path -LiteralPath $pythonProyecto)) {
+    $pythonValido = $false
+    if (Test-Path -LiteralPath $pythonProyecto) {
+        try {
+            $versionPython = (& $pythonProyecto --version 2>$null | Out-String).Trim()
+            $pythonValido = $LASTEXITCODE -eq 0 -and $versionPython -match '^Python 3\.(\d+)\.' -and [int]$Matches[1] -ge 12
+        } catch { }
+    }
+    if (-not $pythonValido) {
         Write-Host '[1/5] Preparando Python por primera vez...'
-        $pythonSistema = $null
-        $argumentosPython = @()
-        foreach ($candidato in @('py.exe', 'python.exe')) {
-            $rutaPython = BuscarPrograma $candidato
-            if (-not $rutaPython) { continue }
-            $argumentos = @()
-            if ($candidato -eq 'py.exe') { $argumentos = @('-3') }
-            try {
-                $version = (& $rutaPython @argumentos --version 2>$null | Out-String).Trim()
-                if ($LASTEXITCODE -eq 0 -and $version -match '^Python 3\.(\d+)\.' -and [int]$Matches[1] -ge 12) {
-                    $pythonSistema = $rutaPython; $argumentosPython = $argumentos; break
-                }
-            } catch { }
+        $seleccionPython = BuscarPythonLocal
+        if (-not $seleccionPython) { $seleccionPython = InstalarPythonLocal }
+        $pythonSistema = $seleccionPython.Ruta
+        $argumentosPython = $seleccionPython.Args
+        $entorno = Join-Path $raizProyecto 'backend\.venv'
+        if (Test-Path -LiteralPath $entorno) {
+            # Conserva un entorno copiado o danado, en vez de borrarlo.
+            $esperado = [IO.Path]::GetFullPath((Join-Path $raizProyecto 'backend\.venv'))
+            if ((Resolve-Path -LiteralPath $entorno).Path -ne $esperado) { throw 'La ruta del entorno Python no coincide con este proyecto.' }
+            Move-Item -LiteralPath $entorno -Destination (Join-Path $carpetaLogs ('entorno-anterior-' + [guid]::NewGuid().ToString('N')))
         }
-        if (-not $pythonSistema) { throw 'Falta Python 3.12 o superior. Instala Python 3.14 y vuelve a abrir iniciar.bat.' }
         & $pythonSistema @argumentosPython -m venv (Join-Path $raizProyecto 'backend\.venv')
         if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el entorno Python del proyecto.' }
     }
@@ -127,14 +143,19 @@ try {
     $modelos = $null
     try { $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 } catch { }
     if ($null -eq $modelos) {
-        if (-not $ollama) { throw 'Falta Ollama. Instalalo y vuelve a abrir iniciar.bat.' }
+        if (-not $ollama) {
+            $ollama = InstalarOllamaLocal
+            try { $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 } catch { }
+        }
+    }
+    if ($null -eq $modelos) {
         Write-Host 'Iniciando Ollama; la deteccion del equipo puede tardar un momento...'
         $servicioOllama = RegistrarProceso (Start-Process -FilePath $ollama -ArgumentList 'serve' -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $carpetaLogs 'ollama.log') -RedirectStandardError (Join-Path $carpetaLogs 'ollama-error.log'))
-        EsperarServicio 'http://127.0.0.1:11434/api/tags' 'models' '' $servicioOllama 180
+        EsperarServicio 'http://127.0.0.1:11434/api/tags' 'models' '' $null 180
         $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3
     }
     if (-not @($modelos.models | Where-Object { $_.name -eq 'deepseek-r1:8b' }).Count) {
-        if (-not $ollama) { throw 'Falta deepseek-r1:8b y no se encontro Ollama para descargarlo.' }
+        if (-not $ollama) { $ollama = InstalarOllamaLocal }
         Write-Host 'Primera descarga del modelo: unos 5 GB. Espera a que termine; no cierres esta ventana.' -ForegroundColor Yellow
         & $ollama pull deepseek-r1:8b
         if ($LASTEXITCODE -ne 0) { throw 'La descarga no termino. Revisa Internet y vuelve a iniciar para reanudarla.' }
@@ -185,5 +206,6 @@ try {
         [Environment]::SetEnvironmentVariable($nombre, $variablesAnteriores[$nombre], 'Process')
     }
     if ($bloqueoProyecto) { $bloqueoProyecto.Dispose() }
+    if ($null -ne $tlsAnteriorProyecto) { [Net.ServicePointManager]::SecurityProtocol = $tlsAnteriorProyecto }
 }
 exit $codigoSalidaProyecto

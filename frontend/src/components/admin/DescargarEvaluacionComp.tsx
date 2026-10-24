@@ -32,7 +32,7 @@ function DescargarEvaluacionComp({ alumnos }: { alumnos: number[] }) {
     <BotonUI onClick={descargar} disabled={descargando || !alumnos.length || alumnos.length > 100} aria-busy={descargando}>
       <Download size={17} aria-hidden="true" />{descargando ? 'Preparando Excel…' : 'Descargar evaluación inicial y final'}
     </BotonUI>
-    <p className="max-w-xl text-xs leading-relaxed text-slate-500">Excel de {alumnos.length} {alumnos.length === 1 ? 'estudiante' : 'estudiantes'}: comparación de semanas 1 y 4, citas y conversaciones. Evaluación cualitativa; no es una puntuación SISCO.</p>
+    <p className="max-w-xl text-xs leading-relaxed text-slate-500">Excel de {alumnos.length} {alumnos.length === 1 ? 'estudiante' : 'estudiantes'}: ID y frecuencias declaradas de 1 a 5 por indicador, semanas 1 y 4. Los datos insuficientes aparecen como «Sin información».</p>
     {alumnos.length > 100 && <p className="text-xs text-amber-700">Filtra la lista para descargar hasta 100 estudiantes a la vez.</p>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
   </div>

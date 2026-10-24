@@ -1,6 +1,6 @@
-"""Descarga de evidencia registrada; no convierte conversaciones a puntajes SISCO."""
+"""Exportación de frecuencias declaradas; no calcula intensidad ni un puntaje total."""
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from math import ceil
 import re
@@ -12,23 +12,18 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from chat.models import Mensaje
-from ml.analisis import DIMENSIONES, INDICADORES, sintetizar_indicador
+from ml.analisis import INDICADORES
 from sesiones.models import SesionSemanal
 from .models import Evidencia
+from .frecuencias import frecuencia_periodo
 
 LIMA = ZoneInfo('America/Lima')
-SENALES = {'dificultad': 'Dificultad expresada', 'recurso': 'Recurso de afrontamiento', 'ausencia_explicita': 'Ausencia expresada'}
 CONTROL_XML = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
 
 
 def hora_lima(fecha):
     # Excel no conserva zonas horarias: la ficha identifica la zona de todas las fechas.
     return fecha.astimezone(LIMA).replace(tzinfo=None) if fecha else None
-
-
-def origen(usuario):
-    perfil = getattr(usuario, 'perfil', None)
-    return 'Demostración: personaje y relatos ficticios' if perfil and perfil.origen_datos == 'demostracion' else 'Interacción registrada'
 
 
 def crear_hoja(libro, nombre, columnas):
@@ -63,101 +58,76 @@ def agregar(hoja, valores):
     hoja.row_dimensions[hoja.max_row].height = min(409, max(30, lineas * 15 + 10))
 
 
-def estado_periodo(sesion, mensajes, ahora):
-    if not sesion:
-        return 'Semana no registrada'
-    if ahora < sesion.inicio:
-        return 'Semana no iniciada'
-    pendientes = sum(m.analisis_estado != 'listo' for m in mensajes)
-    if not mensajes:
-        return 'Sin mensajes' if ahora >= sesion.fin else 'En curso, sin mensajes'
-    if pendientes:
-        return f'Análisis pendiente: {pendientes} mensajes'
-    return 'Finalizada, análisis disponible' if ahora >= sesion.fin else 'En curso, análisis provisional'
-
-
-def descripcion(sesion, mensajes, evidencias, indicador, ahora):
-    estado = estado_periodo(sesion, mensajes, ahora)
-    items = [e for e in evidencias if e.indicador == indicador]
-    if not items:
-        return estado, 'Sin evidencia suficiente', '', ''
-    senales = ' / '.join(SENALES[s] for s in SENALES if any(e.senal == s for e in items))
-    conclusion = sintetizar_indicador([{'senal': e.senal, 'observacion': e.observacion} for e in items])
-    citas = '\n'.join(f'{e.mensaje.fecha.astimezone(LIMA):%d/%m}: {e.cita}' for e in items)
-    return estado, senales, conclusion, citas
-
-
 def crear_excel(usuarios, ahora=None):
     ahora = ahora or timezone.now()
+    usuarios = sorted(usuarios, key=lambda usuario: usuario.pk)
     ids = [u.pk for u in usuarios]
-    mensajes = list(Mensaje.objects.filter(usuario_id__in=ids, fecha__lte=ahora).order_by('fecha', 'id')[:20001])
+    sesiones = {s.pk: s for s in SesionSemanal.objects.filter(usuario_id__in=ids, numero__in=(1, 4))}
+    mensajes = list(Mensaje.objects.filter(usuario_id__in=ids, sesion_id__in=sesiones, fecha__lte=ahora).order_by('fecha', 'pk')[:20001])
     if len(mensajes) > 20000:
         raise ValueError('La selección supera 20 000 mensajes. Descarga un grupo más pequeño.')
-    sesiones = list(SesionSemanal.objects.filter(usuario_id__in=ids).order_by('numero'))
-    por_sesion = {s.pk: s for s in sesiones}
-    mensajes = [m for m in mensajes if m.sesion_id in por_sesion and por_sesion[m.sesion_id].usuario_id == m.usuario_id and por_sesion[m.sesion_id].inicio <= m.fecha < por_sesion[m.sesion_id].fin]
-    por_id = {m.pk: m for m in mensajes if m.remitente == 'usuario'}
-    evidencias = list(Evidencia.objects.filter(mensaje_id__in=por_id).order_by('mensaje__fecha', 'pk')[:60001])
-    if len(evidencias) > 60000:
+    mensajes = [m for m in mensajes if sesiones[m.sesion_id].usuario_id == m.usuario_id and sesiones[m.sesion_id].inicio <= m.fecha < sesiones[m.sesion_id].fin]
+    anteriores = {}
+    relatos = {m.pk: m for m in mensajes if m.remitente == 'usuario'}
+    for mensaje in mensajes:
+        previo = anteriores.get((mensaje.usuario_id, mensaje.sesion_id))
+        padre = relatos.get(previo.respuesta_a_id) if previo else None
+        if previo and padre and previo.remitente == 'asistente' and padre.usuario_id == mensaje.usuario_id and padre.sesion_id == mensaje.sesion_id and padre.fecha <= previo.fecha and timedelta(0) <= mensaje.fecha - previo.fecha <= timedelta(hours=2):
+            mensaje._pregunta_frecuencia = previo.contenido
+        anteriores[(mensaje.usuario_id, mensaje.sesion_id)] = mensaje
+    mensajes = {m.pk: m for m in mensajes if m.remitente == 'usuario'}
+    por_sesion, evidencias = defaultdict(list), defaultdict(list)
+    for mensaje in mensajes.values():
+        por_sesion[mensaje.sesion_id].append(mensaje)
+    candidatas = list(Evidencia.objects.filter(mensaje_id__in=mensajes).order_by('mensaje__fecha', 'pk')[:60001])
+    if len(candidatas) > 60000:
         raise ValueError('La selección tiene demasiadas evidencias. Descarga un grupo más pequeño.')
-    evidencias = [e for e in evidencias if por_id[e.mensaje_id].analisis_estado == 'listo' and e.indicador in INDICADORES and e.senal in SENALES and e.cita.strip() and e.cita in por_id[e.mensaje_id].contenido]
-    ms, es = defaultdict(list), defaultdict(list)
-    for mensaje in por_id.values():
-        ms[mensaje.sesion_id].append(mensaje)
-    for evidencia in evidencias:
-        evidencia.mensaje = por_id[evidencia.mensaje_id]
-        es[evidencia.mensaje.sesion_id].append(evidencia)
+    for evidencia in candidatas:
+        evidencia.mensaje = mensajes[evidencia.mensaje_id]
+        evidencias[evidencia.mensaje.sesion_id].append(evidencia)
 
     libro = Workbook()
     libro.remove(libro.active)
     libro.properties.creator = 'Chatbot Cognitivo'
-    libro.properties.title = 'Evaluación conversacional inicial y final'
-    ficha = crear_hoja(libro, 'Ficha', [('Campo', 30), ('Descripción', 110)])
+    libro.properties.title = 'Frecuencias declaradas por indicador'
+    columnas = [('ID estudiante', 20)]
+    for periodo in ('Inicial · S1', 'Final · S4'):
+        columnas.extend((f'{periodo} · {meta["nombre"]}', 25) for meta in INDICADORES.values())
+    resultados = crear_hoja(libro, 'Resultados', columnas)
+    resultados.freeze_panes = 'B2'
+    resultados.row_dimensions[1].height = 60
+    ficha = crear_hoja(libro, 'Ficha', [('Campo', 31), ('Descripción', 115)])
+    ficha.freeze_panes = 'A2'
     for fila in [
-        ('Documento', 'Evaluación conversacional inicial y final · versión 1'),
+        ('Documento', 'Frecuencias declaradas por indicador · versión 2'),
         ('Exportado', hora_lima(ahora)),
-        ('Zona horaria', 'America/Lima (UTC-05:00), todas las fechas del archivo'),
-        ('Población prevista', 'Estudiantes de quinto de secundaria de colegio'),
-        ('Inicio y cierre', 'Inicio = semana 1; cierre = semana 4. Se incluyen todos sus mensajes disponibles al descargar. La semana 1 no es una medición anterior al uso del chatbot.'),
-        ('Método', 'Análisis automático cualitativo por siete indicadores de las tres dimensiones del proyecto. Las observaciones se respaldan con citas literales del estudiante.'),
-        ('Alcance', 'No se aplicó el cuestionario SISCO: este archivo no produce su pretest/postest, escala 1–5, baremos, diagnósticos ni prueba de eficacia. La comparación describe relatos de dos periodos.'),
-        ('Señales', 'Dificultad expresada; recurso de afrontamiento; ausencia expresada. Pueden coexistir. Una ausencia requiere una negación explícita, no falta de citas.'),
-        ('Información faltante', 'Sin mensajes, análisis pendiente y sin evidencia son estados distintos. No equivalen a cero estrés ni se rellenan con valores inventados.'),
-        ('Lectura', 'Comparación contrasta semanas 1 y 4. Semanas incluye los cuatro periodos. Evidencias y Conversaciones permiten revisar cada fuente por su identificador.'),
-        ('Actividad', 'Los recuentos representan mensajes y días con actividad; no son puntuaciones de estrés ni minutos de conversación continua.'),
-        ('Procedencia', 'Consultar Origen en Estudiantes y Comparación. Los registros de demostración son ficticios y no constituyen participantes ni resultados empíricos de la tesis.'),
-        ('Acceso', 'Exportación exclusiva del administrador. Contiene relatos personales; no incluye contraseñas ni correos.'),
+        ('Periodo', 'Inicial = semana 1; final = semana 4. Son periodos de conversación, no una medición anterior al uso del sistema.'),
+        ('Escala', '1 = Nunca; 2 = Rara vez; 3 = Algunas veces; 4 = Casi siempre; 5 = Siempre.'),
+        ('Fuente', 'Expresiones literales del estudiante vinculadas a un indicador y a esta semana. También se acepta una respuesta de frecuencia tras una pregunta semanal inequívoca del chatbot, en la misma sesión y dentro de dos horas. No se adivinan frecuencias.'),
+        ('Dificultades', 'Sobrecarga, presión del tiempo y síntomas: mayor valor significa una dificultad relatada con mayor frecuencia.'),
+        ('Afrontamiento', 'Planificación, automotivación y búsqueda de soporte: mayor valor significa mayor frecuencia de uso del recurso, no más estrés.'),
+        ('Sin información', 'No hay una frecuencia inequívoca, hay relatos contradictorios, faltan mensajes, quedan análisis pendientes o la semana todavía no finaliza. No equivale a Nunca ni a cero estrés.'),
+        ('Alcance', 'Registro descriptivo de frecuencia, sin suma global ni clasificación de estrés bajo, medio o alto. No es una escala validada de intensidad, un diagnóstico ni una prueba de eficacia.'),
+        ('Identificadores', 'Se usa el ID interno del estudiante. Este archivo no incluye nombres, correos, contraseñas ni conversaciones.'),
     ]:
         agregar(ficha, fila)
-    estudiantes = crear_hoja(libro, 'Estudiantes', [('Código', 15), ('Nombre', 32), ('Origen', 49), ('Primer mensaje', 22), ('Último mensaje', 22), ('Mensajes del estudiante', 18), ('Días con mensajes', 18)])
-    comparacion = crear_hoja(libro, 'Comparación', [('Código', 15), ('Nombre', 30), ('Origen', 49), ('Dimensión', 29), ('Indicador', 27), ('Estado inicial · S1', 34), ('Señales iniciales', 35), ('Observación inicial', 64), ('Citas iniciales', 70), ('Estado final · S4', 34), ('Señales finales', 35), ('Observación final', 64), ('Citas finales', 70)])
-    semanas = crear_hoja(libro, 'Semanas', [('Código', 15), ('Semana', 12), ('Inicio', 22), ('Fin exclusivo', 22), ('Estado', 36), ('Mensajes del estudiante', 18), ('Analizados', 16), ('Pendientes', 16), ('Días con mensajes', 18), ('Indicadores con citas (de 7)', 21)])
-    fuentes = crear_hoja(libro, 'Evidencias', [('Código', 15), ('Semana', 12), ('Fecha', 22), ('Dimensión', 29), ('Indicador', 27), ('Señal', 30), ('Cita literal', 75), ('Observación del sistema', 70), ('ID mensaje', 40)])
-    conversaciones = crear_hoja(libro, 'Conversaciones', [('Código', 15), ('Semana', 12), ('Fecha', 22), ('Remitente', 18), ('Contenido', 100), ('Análisis', 20), ('ID mensaje', 40), ('En respuesta a', 40)])
+    demos = []
     for usuario in usuarios:
-        codigo = f'EST-{usuario.pk:05d}'
-        propias = {s.numero: s for s in sesiones if s.usuario_id == usuario.pk}
-        propios = [m for m in por_id.values() if m.usuario_id == usuario.pk]
-        agregar(estudiantes, [codigo, usuario.first_name, origen(usuario), hora_lima(min((m.fecha for m in propios), default=None)), hora_lima(max((m.fecha for m in propios), default=None)), len(propios), len({m.fecha.astimezone(LIMA).date() for m in propios})])
-        for indicador, metadata in INDICADORES.items():
-            periodos = []
-            for numero in (1, 4):
-                sesion = propias.get(numero)
-                periodos.extend(descripcion(sesion, ms[sesion.pk] if sesion else [], es[sesion.pk] if sesion else [], indicador, ahora))
-            agregar(comparacion, [codigo, usuario.first_name, origen(usuario), DIMENSIONES[metadata['dimension']], metadata['nombre'], *periodos])
-        for numero in range(1, 5):
-            sesion = propias.get(numero)
-            registros = ms[sesion.pk] if sesion else []
-            analizados = sum(m.analisis_estado == 'listo' for m in registros)
-            agregar(semanas, [codigo, numero, hora_lima(sesion.inicio) if sesion else None, hora_lima(sesion.fin) if sesion else None, estado_periodo(sesion, registros, ahora), len(registros), analizados, len(registros) - analizados, len({m.fecha.astimezone(LIMA).date() for m in registros}), len({e.indicador for e in es[sesion.pk]}) if sesion else 0])
-        for e in (e for e in evidencias if e.mensaje.usuario_id == usuario.pk):
-            metadata = INDICADORES[e.indicador]
-            agregar(fuentes, [codigo, por_sesion[e.mensaje.sesion_id].numero, hora_lima(e.mensaje.fecha), DIMENSIONES[metadata['dimension']], metadata['nombre'], SENALES[e.senal], e.cita, e.observacion, str(e.mensaje_id)])
-        for m in (m for m in mensajes if m.usuario_id == usuario.pk):
-            agregar(conversaciones, [codigo, por_sesion[m.sesion_id].numero, hora_lima(m.fecha), 'Estudiante' if m.remitente == 'usuario' else 'Chatbot', m.contenido, m.analisis_estado if m.remitente == 'usuario' else 'No corresponde', str(m.pk), str(m.respuesta_a_id) if m.respuesta_a_id else ''])
+        codigo = f'Estudiante {usuario.pk}'
+        perfil = getattr(usuario, 'perfil', None)
+        if perfil and perfil.origen_datos == 'demostracion':
+            demos.append(codigo)
+        fila = [codigo]
+        for numero in (1, 4):
+            sesion = next((s for s in sesiones.values() if s.usuario_id == usuario.pk and s.numero == numero), None)
+            registros = por_sesion[sesion.pk] if sesion else []
+            completo = bool(sesion and ahora >= sesion.fin and registros and all(m.analisis_estado == 'listo' for m in registros))
+            fila.extend(frecuencia_periodo(evidencias[sesion.pk], indicador, registros) if completo else 'Sin información' for indicador in INDICADORES)
+        agregar(resultados, fila)
+    if demos:
+        agregar(ficha, ('Tipo de datos', 'Demostración: ' + ', '.join(demos) + '. Sus relatos fueron generados para comprobar el sistema; no son observaciones de participantes de investigación.'))
     for hoja in libro:
         hoja.auto_filter.ref = hoja.dimensions
-    libro.active = 2
     salida = BytesIO()
     libro.save(salida)
     return salida.getvalue()
