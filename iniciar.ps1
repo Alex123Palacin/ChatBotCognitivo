@@ -70,6 +70,7 @@ try {
         OLLAMA_URL = 'http://127.0.0.1:11434'
         OLLAMA_HOST = '127.0.0.1:11434'
         OLLAMA_MODEL = 'deepseek-r1:8b'
+        OLLAMA_CHAT_MODEL = 'qwen3:1.7b'
         NODE_ENV = 'development'
         PYTHONIOENCODING = 'utf-8'
     }
@@ -138,7 +139,7 @@ try {
         Set-Content -LiteralPath $marcaReact -Value $huellaReact -Encoding ASCII
     }
 
-    Write-Host '[3/5] Comprobando Ollama y deepseek-r1:8b...'
+    Write-Host '[3/5] Comprobando Ollama y los modelos de chat y analisis...'
     $ollama = BuscarPrograma 'ollama.exe' @((Join-Path $env:LOCALAPPDATA 'Programs\Ollama\ollama.exe'), (Join-Path $env:ProgramFiles 'Ollama\ollama.exe'))
     $modelos = $null
     try { $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 2 } catch { }
@@ -154,13 +155,15 @@ try {
         EsperarServicio 'http://127.0.0.1:11434/api/tags' 'models' '' $null 180
         $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 3
     }
-    if (-not @($modelos.models | Where-Object { $_.name -eq 'deepseek-r1:8b' }).Count) {
-        if (-not $ollama) { $ollama = InstalarOllamaLocal }
-        Write-Host 'Primera descarga del modelo: unos 5 GB. Espera a que termine; no cierres esta ventana.' -ForegroundColor Yellow
-        & $ollama pull deepseek-r1:8b
-        if ($LASTEXITCODE -ne 0) { throw 'La descarga no termino. Revisa Internet y vuelve a iniciar para reanudarla.' }
-        $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
-        if (-not @($modelos.models | Where-Object { $_.name -eq 'deepseek-r1:8b' }).Count) { throw 'Ollama no confirma que el modelo este descargado.' }
+    foreach ($modeloNecesario in @($variablesLocales.OLLAMA_CHAT_MODEL, $variablesLocales.OLLAMA_MODEL) | Select-Object -Unique) {
+        if (-not @($modelos.models | Where-Object { $_.name -eq $modeloNecesario }).Count) {
+            if (-not $ollama) { $ollama = InstalarOllamaLocal }
+            Write-Host "Primera descarga de $modeloNecesario. Espera a que termine; no cierres esta ventana." -ForegroundColor Yellow
+            & $ollama pull $modeloNecesario
+            if ($LASTEXITCODE -ne 0) { throw 'La descarga no termino. Revisa Internet y vuelve a iniciar para reanudarla.' }
+            $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
+            if (-not @($modelos.models | Where-Object { $_.name -eq $modeloNecesario }).Count) { throw 'Ollama no confirma que el modelo este descargado.' }
+        }
     }
 
     Write-Host '[4/5] Preparando la base local e iniciando el backend...'

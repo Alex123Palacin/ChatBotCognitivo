@@ -8,7 +8,7 @@ from django.utils import timezone
 from openpyxl import load_workbook
 
 from chat.models import Mensaje
-from sesiones.services import iniciar_programa
+from sesiones.services import iniciar_programa, iniciar_conversacion
 from usuarios.models import Perfil
 from .models import Evidencia, ReporteSemanal
 from .exportacion import crear_excel
@@ -41,25 +41,25 @@ class ExportacionTests(TestCase):
         self.assertIn('attachment;', respuesta.headers['Content-Disposition'])
         return load_workbook(BytesIO(respuesta.content))
 
-    def valor(self, libro, periodo, indicador):
+    def valor(self, libro, indicador):
         filas = list(libro['Resultados'].values)
-        return filas[1][filas[0].index(f'{periodo} · {indicador}')]
+        return filas[1][filas[0].index(f'Actividad · {indicador}')]
 
-    def test_exporta_id_y_catorce_valores_sin_datos_personales(self):
-        self.mensaje(1, 'Esta semana nunca organizo mis tareas.', cita='nunca organizo mis tareas', senal='ausencia_explicita')
+    def test_exporta_id_y_siete_valores_de_actividad_sin_datos_personales(self):
+        self.mensaje(1, 'Esta semana casi siempre organizo mis tareas.', cita='casi siempre organizo mis tareas')
         self.mensaje(4, 'Esta semana casi siempre organizo mis tareas.', cita='casi siempre organizo mis tareas')
         with patch('reportes.services.analizar_mensaje') as modelo:
             libro = self.libro()
             modelo.assert_not_called()
         self.assertEqual(libro.sheetnames, ['Resultados', 'Ficha'])
-        self.assertEqual(libro['Resultados'].max_column, 15)
+        self.assertEqual(libro['Resultados'].max_column, 8)
         self.assertEqual(libro['Resultados']['A2'].value, f'Estudiante {self.usuario.pk}')
-        self.assertEqual(self.valor(libro, 'Inicial · S1', 'Planificación'), 1)
-        self.assertEqual(self.valor(libro, 'Final · S4', 'Planificación'), 4)
+        self.assertEqual(self.valor(libro, 'Planificación'), 4)
         contenido = str([list(h.values) for h in libro])
         self.assertNotIn(self.usuario.first_name, contenido)
         self.assertNotIn(self.usuario.email, contenido)
-        self.assertNotIn('SISCO', contenido)
+        self.assertNotIn('Inicial · S1', contenido)
+        self.assertNotIn('Final · S4', contenido)
         self.assertEqual(ReporteSemanal.objects.count(), 0)
 
     def test_procedencia_solo_en_ficha_y_solo_si_hay_registros_generados(self):
@@ -73,28 +73,40 @@ class ExportacionTests(TestCase):
         self.assertNotIn('demostración', contenido)
         self.assertNotIn('fictici', contenido)
 
-    def test_faltantes_y_pendientes_no_se_califican_ni_se_reemplaza_semana4(self):
+    def test_periodo_abierto_exporta_evidencia_sin_exigir_semanas_o_cierre(self):
+        sesion = iniciar_conversacion(self.perfil, self.ahora - timedelta(hours=1))
+        self.assertIsNone(sesion.fin)
+        texto = 'Esta semana casi siempre organizo mis tareas.'
+        mensaje = Mensaje.objects.create(
+            usuario=self.usuario, sesion=sesion, contenido=texto,
+            remitente='usuario', fecha=self.ahora - timedelta(minutes=5), analisis_estado='listo',
+        )
+        Evidencia.objects.create(mensaje=mensaje, indicador='planificacion', cita=texto,
+                                observacion='Frecuencia explícita del estudiante.', senal='recurso')
+        libro = self.libro()
+        self.assertEqual(libro['Resultados'].max_column, 8)
+        self.assertEqual(self.valor(libro, 'Planificación'), 4)
+
+    def test_pendientes_no_se_califican_y_se_incluye_toda_la_actividad_real(self):
         self.mensaje(3, 'Esta semana siempre organizo mis tareas.', cita='siempre organizo mis tareas')
         self.mensaje(4, 'Esta semana siempre organizo mis tareas.', estado='pendiente', cita='siempre organizo mis tareas')
         libro = self.libro()
-        for periodo in ('Inicial · S1', 'Final · S4'):
-            self.assertEqual(self.valor(libro, periodo, 'Planificación'), 'Sin información')
+        self.assertEqual(self.valor(libro, 'Planificación'), 'Sin información')
         self.semanas[4].delete()
-        self.assertEqual(self.valor(self.libro(), 'Final · S4', 'Planificación'), 'Sin información')
+        self.assertEqual(self.valor(self.libro(), 'Planificación'), 5)
 
     def test_descarta_citas_inventadas_y_fechas_fuera_de_sesion(self):
         self.mensaje(1, 'Solo este texto', cita='Esta semana siempre organizo mis tareas.')
         m = self.mensaje(4, 'Esta semana siempre organizo mis tareas.', cita='siempre organizo mis tareas')
         Mensaje.objects.filter(pk=m.pk).update(fecha=self.semanas[4].fin)
         libro = self.libro()
-        self.assertEqual(self.valor(libro, 'Inicial · S1', 'Planificación'), 'Sin información')
-        self.assertEqual(self.valor(libro, 'Final · S4', 'Planificación'), 'Sin información')
+        self.assertEqual(self.valor(libro, 'Planificación'), 'Sin información')
 
     def test_conflictos_no_se_promedian(self):
         for frecuencia in ('rara vez', 'siempre'):
             texto = f'Esta semana {frecuencia} organizo mis tareas.'
             self.mensaje(1, texto, cita=texto)
-        self.assertEqual(self.valor(self.libro(), 'Inicial · S1', 'Planificación'), 'Sin información')
+        self.assertEqual(self.valor(self.libro(), 'Planificación'), 'Sin información')
 
     def test_no_exporta_formulas_desde_mensajes_y_fecha_es_lima(self):
         self.mensaje(1, '=HYPERLINK("https://ejemplo.invalid", "clic")')
@@ -122,17 +134,18 @@ class ExportacionTests(TestCase):
         self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': self.admin.pk}).status_code, 404)
         self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': 9999999}).status_code, 404)
 
-    def test_semana_en_curso_no_se_presenta_como_frecuencia_final(self):
+    def test_actividad_en_curso_no_inventa_una_medicion_final(self):
         m = self.mensaje(4, 'Esta semana siempre organizo mis tareas.', cita='siempre organizo mis tareas')
         ahora = m.fecha + timedelta(hours=1)
         libro = load_workbook(BytesIO(crear_excel([self.usuario], ahora=ahora)))
-        self.assertEqual(self.valor(libro, 'Final · S4', 'Planificación'), 'Sin información')
+        self.assertEqual(self.valor(libro, 'Planificación'), 5)
+        self.assertFalse(any('Inicial' in str(celda.value) or 'Final ·' in str(celda.value) for celda in libro['Resultados'][1]))
 
     def test_respuesta_corta_usa_solo_pregunta_inmediata_de_la_misma_sesion(self):
         padre = self.mensaje(1, 'Me falta tiempo para las tareas.')
         pregunta = Mensaje.objects.create(usuario=self.usuario, sesion=self.semanas[1], remitente='asistente', contenido='¿Con qué frecuencia te falta tiempo para las tareas esta semana?', fecha=padre.fecha + timedelta(seconds=20), respuesta_a=padre, analisis_estado='listo')
         respuesta = self.mensaje(1, 'Casi siempre.')
         Mensaje.objects.filter(pk=respuesta.pk).update(fecha=pregunta.fecha + timedelta(seconds=20))
-        self.assertEqual(self.valor(self.libro(), 'Inicial · S1', 'Presión del tiempo'), 4)
+        self.assertEqual(self.valor(self.libro(), 'Presión del tiempo'), 4)
         Mensaje.objects.filter(pk=respuesta.pk).update(fecha=pregunta.fecha + timedelta(hours=3))
-        self.assertEqual(self.valor(self.libro(), 'Inicial · S1', 'Presión del tiempo'), 'Sin información')
+        self.assertEqual(self.valor(self.libro(), 'Presión del tiempo'), 'Sin información')

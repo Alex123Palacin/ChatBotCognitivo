@@ -1,5 +1,13 @@
 # Solo para servidores NVIDIA con NVIDIA Container Toolkit instalado.
 services:
+  # Los dos procesos conservan la misma selección chat/análisis del Compose base.
+  # Un OLLAMA_NUM_GPU=0 explícito sigue solicitando CPU; usa 16 para NVIDIA.
+  backend:
+    environment:
+      OLLAMA_NUM_GPU: ${OLLAMA_NUM_GPU:-16}
+  worker:
+    environment:
+      OLLAMA_NUM_GPU: ${OLLAMA_NUM_GPU:-16}
   ollama:
     deploy:
       resources:

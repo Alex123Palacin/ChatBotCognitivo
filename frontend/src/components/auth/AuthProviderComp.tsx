@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { cerrarSesionApi, iniciarSesionApi, obtenerUsuario, registrarApi } from '../../api/authApi'
 import { AuthContext } from '../../hooks/useAuth'
-import type { Usuario } from '../../types/auth'
+import type { AceptacionTerminos, Usuario } from '../../types/auth'
 
 function AuthProviderComp({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -75,9 +75,9 @@ function AuthProviderComp({ children }: { children: ReactNode }) {
     return datos.usuario
   }
 
-  async function registrar(nombre: string, email: string, password: string): Promise<Usuario> {
+  async function registrar(nombre: string, email: string, password: string, aceptacion: AceptacionTerminos): Promise<Usuario> {
     const version = ++versionSesion.current
-    const datos = await registrarApi(nombre.trim(), email.trim().toLowerCase(), password)
+    const datos = await registrarApi(nombre.trim(), email.trim().toLowerCase(), password, aceptacion)
     if (version === versionSesion.current) {
       setUsuario(datos.usuario)
       setCargando(false)

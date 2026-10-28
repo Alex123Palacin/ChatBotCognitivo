@@ -24,16 +24,12 @@ class ChatPersistenteTests(TestCase):
         return self.client.post('/api/chat/', json.dumps({'mensaje': texto, 'clave_envio': str(clave or uuid.uuid4())}), content_type='application/json')
 
     @patch('chat.services.responder_conversacion', return_value='Parece una semana exigente. ¿Qué te preocupa más ahora?')
-    def test_primer_mensaje_crea_cuatro_semanas_y_historial_persiste(self, modelo):
+    def test_primer_mensaje_crea_conversacion_abierta_y_historial_persiste(self, modelo):
         respuesta = self.enviar()
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(len(respuesta.json()['mensajes']), 2)
-        self.assertEqual(len(respuesta.json()['sesiones']), 4)
-        semanas = list(SesionSemanal.objects.all())
-        for semana in semanas:
-            self.assertEqual(semana.fin - semana.inicio, timedelta(days=7))
-        for actual, siguiente in zip(semanas, semanas[1:]):
-            self.assertEqual(actual.fin, siguiente.inicio)
+        self.assertEqual(len(respuesta.json()['sesiones']), 1)
+        self.assertIsNone(SesionSemanal.objects.get().fin)
         self.client.logout()
         self.client.force_login(self.usuario)
         self.assertEqual(len(self.client.get('/api/chat/').json()['mensajes']), 2)
@@ -64,16 +60,18 @@ class ChatPersistenteTests(TestCase):
         self.assertEqual(Mensaje.objects.count(), 2)
 
     @patch('chat.services.responder_conversacion', return_value='Aquí estoy.')
-    def test_periodo_anclado_primero_mensaje_y_no_crea_quinta_semana(self, modelo):
+    def test_continuar_historico_conserva_fechas_y_no_bloquea_a_los_28_dias(self, modelo):
         inicio = timezone.now() - timedelta(days=8)
         iniciar_programa(self.perfil, inicio)
-        self.assertEqual(self.enviar().json()['mensajes'][0]['sesion_numero'], 2)
-        self.assertEqual(SesionSemanal.objects.count(), 4)
+        fechas_historicas = list(SesionSemanal.objects.values_list('pk', 'inicio', 'fin'))
+        self.assertEqual(self.enviar().json()['mensajes'][0]['sesion_numero'], 5)
+        self.assertEqual(SesionSemanal.objects.count(), 5)
         with patch('chat.services.timezone.now', return_value=inicio + timedelta(days=28)):
             # Al adelantar 20 días también vence la cookie Django de 14 días.
             self.client.force_login(self.usuario)
-            self.assertEqual(self.enviar('Otro mensaje').status_code, 409)
-            self.assertTrue(self.client.get('/api/chat/').json()['programa_finalizado'])
+            self.assertEqual(self.enviar('Otro mensaje').status_code, 200)
+            self.assertFalse(self.client.get('/api/chat/').json()['programa_finalizado'])
+        self.assertEqual(list(SesionSemanal.objects.filter(fin__isnull=False).values_list('pk', 'inicio', 'fin')), fechas_historicas)
 
     @patch('chat.services.responder_conversacion', return_value='Te escucho.')
     def test_historial_personal_no_expone_otros_estudiantes(self, modelo):
@@ -95,21 +93,21 @@ class ChatPersistenteTests(TestCase):
         self.assertEqual(SesionSemanal.objects.count(), 0)
 
     @patch('chat.services.responder_conversacion', return_value='Podemos seguir conversando.')
-    def test_limite_exacto_de_siete_dias_asigna_nueva_semana_sin_borrar_historial(self, modelo):
+    def test_cruzar_siete_dias_no_divide_ni_borra_la_conversacion(self, modelo):
         inicio = timezone.now()
         iniciar_programa(self.perfil, inicio)
         fin_primera_semana = inicio + timedelta(days=7)
         with patch('chat.services.timezone.now', return_value=fin_primera_semana - timedelta(microseconds=1)):
             respuesta = self.enviar('El mensaje de la primera semana')
             self.assertEqual(respuesta.status_code, 200)
-            self.assertEqual(respuesta.json()['sesion_actual']['numero'], 1)
+            self.assertEqual(respuesta.json()['sesion_actual']['numero'], 5)
         with patch('chat.services.timezone.now', return_value=fin_primera_semana):
             respuesta = self.enviar('Ahora sigo en la siguiente semana')
             self.assertEqual(respuesta.status_code, 200)
             datos = respuesta.json()
-            self.assertEqual(datos['sesion_actual']['numero'], 2)
+            self.assertEqual(datos['sesion_actual']['numero'], 5)
             alumnos = [m for m in datos['mensajes'] if m['remitente'] == 'usuario']
-            self.assertEqual([m['sesion_numero'] for m in alumnos], [1, 2])
+            self.assertEqual([m['sesion_numero'] for m in alumnos], [5, 5])
             self.assertEqual(len(datos['mensajes']), 4)
             self.assertEqual(datos['sesiones'][0]['estado'], 'cerrada')
 
@@ -126,8 +124,8 @@ class ChatPersistenteTests(TestCase):
         with patch('chat.services.timezone.now', return_value=fin_programa):
             respuesta = self.enviar('Último relato antes del cierre', clave)
             self.assertEqual(respuesta.status_code, 200)
-            self.assertTrue(respuesta.json()['programa_finalizado'])
-            self.assertEqual([m['sesion_numero'] for m in respuesta.json()['mensajes']], [4, 4])
-            self.assertEqual(self.enviar('Un mensaje nuevo fuera del programa').status_code, 409)
-            self.assertEqual(SesionSemanal.objects.count(), 4)
-            self.assertEqual(Mensaje.objects.count(), 2)
+            self.assertFalse(respuesta.json()['programa_finalizado'])
+            self.assertEqual([m['sesion_numero'] for m in respuesta.json()['mensajes']], [5, 5])
+            self.assertEqual(self.enviar('Un mensaje nuevo fuera del programa').status_code, 200)
+            self.assertEqual(SesionSemanal.objects.count(), 5)
+            self.assertEqual(Mensaje.objects.count(), 4)

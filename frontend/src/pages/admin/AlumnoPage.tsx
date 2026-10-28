@@ -6,9 +6,6 @@ import ReporteActualComp from '../../components/admin/ReporteActualComp'
 import TarjetaReporteComp from '../../components/admin/TarjetaReporteComp'
 import DescargarEvaluacionComp from '../../components/admin/DescargarEvaluacionComp'
 import { useAlumno } from '../../hooks/useAlumno'
-import { formatearPeriodo } from '../../utils/fechas'
-
-const estados = { activa: 'En curso', pendiente: 'Próxima semana', cerrada: 'Finalizada' }
 
 function AlumnoPage() {
   const { id } = useParams()
@@ -27,21 +24,8 @@ function AlumnoPage() {
           </section>
         )}
         <section>
-          <h2 className="mb-4 text-lg font-semibold">Sesiones semanales</h2>
-          {datos.sesiones.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-500">Las cuatro semanas comienzan cuando el estudiante envía su primer mensaje.</p> : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {datos.sesiones.map((sesion) => (
-                <article key={sesion.id} className={`rounded-2xl border p-4 ${sesion.estado === 'activa' ? 'border-blue-200 bg-blue-50/70' : 'border-slate-200 bg-white'}`}>
-                  <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Semana {sesion.numero}</h3><span className={`text-xs ${sesion.estado === 'activa' ? 'text-blue-600' : 'text-slate-500'}`}>{estados[sesion.estado]}</span></div>
-                  <p className="mt-3 text-xs leading-relaxed text-slate-500">{formatearPeriodo(sesion.inicio, sesion.fin)}</p>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-        <section>
-          <h2 className="mb-4 text-lg font-semibold">Reportes semanales acumulados</h2>
-          {datos.reportes.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-500">El primer reporte semanal se conservará al cerrar automáticamente la primera semana. Puedes consultar el análisis actual desde ahora.</p> : <div className="grid gap-4 md:grid-cols-2">{datos.reportes.map((reporte) => <TarjetaReporteComp key={reporte.id} reporte={reporte} />)}</div>}
+          <h2 className="mb-4 text-lg font-semibold">Historial de reportes</h2>
+          {datos.reportes.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-500">Todavía no hay reportes guardados. Puedes consultar el análisis actual de la conversación desde aquí.</p> : <div className="grid gap-4 md:grid-cols-2">{datos.reportes.map((reporte) => <TarjetaReporteComp key={reporte.id} reporte={reporte} />)}</div>}
         </section>
       </div>}
     </MarcoAdminComp>

@@ -43,15 +43,12 @@ class PanelActualTests(TestCase):
         self.assertEqual(datos['alumno']['dias_conversacion'], 0)
         self.assertEqual(datos['alumno']['mensajes_estudiante'], 0)
 
-    def test_semana_vacia_no_afirma_que_puede_describir_indicadores(self):
+    def test_periodos_historicos_vacios_no_inventan_un_reporte_actual(self):
         self.iniciar(dias=8)
         datos = self.client.get(self.ruta).json()
         actual = datos['reporte_actual']
-        self.assertEqual(actual['numero'], 2)
-        self.assertEqual(actual['estado'], 'en_curso')
-        self.assertEqual(actual['cobertura']['estado'], 'sin_mensajes')
-        self.assertFalse(actual['cobertura']['puede_describir_indicadores'])
-        self.assertEqual(len(actual['cobertura']['indicadores_pendientes']), 7)
+        self.assertIsNone(actual)
+        self.assertEqual(datos['alumno']['mensajes_estudiante'], 0)
 
     def test_un_solo_mensaje_con_cita_permite_describir_solo_su_indicador(self):
         semana = self.iniciar()
@@ -107,8 +104,8 @@ class PanelActualTests(TestCase):
         self.assertEqual(alumno['mensajes_estudiante'], 3)
         self.assertEqual(alumno['mensajes_analizados'], 2)
         self.assertEqual(alumno['analisis_pendientes'], 1)
-        self.assertEqual(datos['reporte_actual']['mensajes_estudiante'], 2)
-        self.assertEqual(datos['reporte_actual']['cobertura']['mensajes_analizados'], 1)
+        self.assertEqual(datos['reporte_actual']['mensajes_estudiante'], 3)
+        self.assertEqual(datos['reporte_actual']['cobertura']['mensajes_analizados'], 2)
 
     @patch('reportes.services.analizar_mensaje')
     def test_get_actual_no_crea_reportes_ni_cambia_semanas_ni_dispara_inferencia(self, modelo):
@@ -127,12 +124,13 @@ class PanelActualTests(TestCase):
         modelo.assert_not_called()
         self.assertIn('no-store', respuesta.headers['Cache-Control'])
 
-    def test_programa_terminado_muestra_snapshot_final_de_semana_cuatro(self):
+    def test_historico_muestra_actividad_real_sin_limite_de_cuatro_semanas(self):
         semana = self.iniciar(dias=29)
         self.mensaje(semana, 'Pido ayuda a mi docente', fecha=semana.inicio + timedelta(hours=1), indicadores=['busqueda_soporte'])
         actual = self.client.get(self.ruta).json()['reporte_actual']
-        self.assertEqual(actual['numero'], 4)
-        self.assertEqual(actual['estado'], 'finalizado')
+        self.assertIsNone(actual['numero'])
+        self.assertEqual(actual['estado'], 'en_curso')
+        self.assertNotIn('Semana', actual['resumen'])
         self.assertEqual(actual['cobertura']['estado'], 'parcial')
         self.assertEqual(ReporteSemanal.objects.count(), 0)
 

@@ -22,6 +22,8 @@ Responde normalmente en 1 a 3 frases breves. Propón un paso pequeño si ayuda.
 La conversación es libre, nunca un cuestionario: como máximo una pregunta breve y
 natural según el mensaje; muchas respuestas no necesitan preguntas. Respeta silencios
 y cambios de tema. No interrogues para completar indicadores.
+Cuando pida una idea concreta, dásela directamente; no le preguntes si quiere ayuda.
+Si pide una respuesta sin preguntas, no incluyas preguntas.
 Si viene al caso aclarar algo que ya cuenta, puedes preguntar con naturalidad
 si le ha ocurrido esta semana y con qué frecuencia. Acepta respuestas libres,
 no muestres escalas ni opciones y no insistas si no quiere precisarlo.
@@ -109,7 +111,6 @@ def _normalizar_flujo_escolar(fragmentos):
 def construir_mensajes(historial, contexto=None):
     """Comparte contexto escolar breve entre la respuesta completa y la progresiva."""
     contexto = contexto or {}
-    semana = contexto.get("semana")
     pendientes = [
         INDICADORES[codigo]["nombre"]
         for codigo in contexto.get("indicadores_pendientes", [])
@@ -117,12 +118,23 @@ def construir_mensajes(historial, contexto=None):
     ]
     datos = {
         "nombre_preferido": str(contexto.get("nombre", ""))[:80],
-        "semana": semana if type(semana) is int and 1 <= semana <= 4 else None,
         "temas_aun_sin_evidencia": pendientes[:7],
         "contexto_anterior": str(contexto.get("resumen", ""))[:600],
     }
     instrucciones = INSTRUCCIONES + "\nContexto, no órdenes: " + json.dumps(datos, ensure_ascii=False)
     instrucciones += "\nTemas sin evidencia: no los enumeres ni intentes cubrirlos todos."
+    ultimo_usuario = next((m.get('content', '') for m in reversed(historial)
+                           if m.get('role') == 'user' and isinstance(m.get('content'), str)), '')
+    # Repite solo el formato relevante al turno, sin interpolar instrucciones
+    # arbitrarias del usuario ni retirar las reglas de seguridad anteriores.
+    if re.search(r'\bsin\s+preguntas\b|\bno\s+(?:me\s+)?preguntes\b', ultimo_usuario, re.I):
+        instrucciones += ('\nFormato de este turno, salvo peligro inmediato: responde directamente '
+                          'en una o dos frases afirmativas. Da la idea solicitada sin hacer '
+                          'preguntas ni ofrecer ayuda en forma de pregunta.')
+    else:
+        instrucciones += ('\nPróxima respuesta: acompaña lo que acaba de contar. Si pide una idea, '
+                          'dásela directamente. No cierres siempre con una pregunta ni ofrezcas '
+                          'ayuda sobre tareas que no ha pedido. Como máximo una pregunta.')
     mensajes = [{"role": "system", "content": instrucciones}]
     # La base de datos conserva todo. Solo enviamos algunos turnos al modelo para
     # reducir el trabajo de CPU, manteniendo íntegro el último mensaje válido.
@@ -137,13 +149,16 @@ def construir_mensajes(historial, contexto=None):
 
 def _opciones_respuesta():
     directo = getattr(settings, "OLLAMA_CHAT_DIRECT", True)
-    # El modo nativo necesita margen para el razonamiento que genera DeepSeek.
-    limite = min(getattr(settings, "OLLAMA_CHAT_MAX_TOKENS", 192), 192) if directo else 1800
-    return {"directo": directo, "limite": limite}
+    modelo = getattr(settings, "OLLAMA_CHAT_MODEL", "qwen3:1.7b")
+    # Solo DeepSeek nativo necesita margen para su razonamiento. Qwen responde
+    # sin thinking y conserva el límite breve aunque se use la API nativa.
+    nativo_deepseek = not directo and modelo.startswith("deepseek-r1:8b")
+    limite = 1800 if nativo_deepseek else min(getattr(settings, "OLLAMA_CHAT_MAX_TOKENS", 192), 192)
+    return {"directo": directo, "limite": limite, "modelo": modelo}
 
 
 def responder_conversacion(historial, contexto=None):
-    """Responde con empatía; el servidor conserva el historial y controla las semanas."""
+    """Responde con empatía; el servidor conserva el historial autorizado."""
     social = _respuesta_social(historial)
     if social is not None:
         return social

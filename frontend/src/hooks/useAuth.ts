@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Usuario } from '../types/auth'
+import type { AceptacionTerminos, Usuario } from '../types/auth'
 
 export interface EstadoAuth {
   usuario: Usuario | null
@@ -7,7 +7,7 @@ export interface EstadoAuth {
   error: string
   refrescarUsuario: () => Promise<void>
   iniciarSesion: (identificador: string, password: string) => Promise<Usuario>
-  registrar: (nombre: string, email: string, password: string) => Promise<Usuario>
+  registrar: (nombre: string, email: string, password: string, aceptacion: AceptacionTerminos) => Promise<Usuario>
   cerrarSesion: () => Promise<void>
 }
 

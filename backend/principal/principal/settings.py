@@ -53,6 +53,9 @@ SECURE_HSTS_PRELOAD = not DEBUG
 
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://127.0.0.1:11434').rstrip('/')
 OLLAMA_MODEL = os.environ.get('OLLAMA_MODEL', 'deepseek-r1:8b')
+# El chat usa un modelo ligero; la extracción de evidencias conserva DeepSeek.
+# Cambiar OLLAMA_MODEL no cambia silenciosamente el modelo de conversación.
+OLLAMA_CHAT_MODEL = os.environ.get('OLLAMA_CHAT_MODEL', 'qwen3:1.7b').strip() or 'qwen3:1.7b'
 OLLAMA_TIMEOUT = 180
 OLLAMA_ANALYSIS_TIMEOUT = int(os.environ.get('OLLAMA_ANALYSIS_TIMEOUT', '360'))
 OLLAMA_ANALYSIS_DIRECT = os.environ.get('OLLAMA_ANALYSIS_DIRECT', 'true').strip().lower() not in ('false', '0', 'no', 'off')

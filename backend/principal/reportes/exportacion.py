@@ -62,11 +62,13 @@ def crear_excel(usuarios, ahora=None):
     ahora = ahora or timezone.now()
     usuarios = sorted(usuarios, key=lambda usuario: usuario.pk)
     ids = [u.pk for u in usuarios]
-    sesiones = {s.pk: s for s in SesionSemanal.objects.filter(usuario_id__in=ids, numero__in=(1, 4))}
+    sesiones = {s.pk: s for s in SesionSemanal.objects.filter(usuario_id__in=ids)}
     mensajes = list(Mensaje.objects.filter(usuario_id__in=ids, sesion_id__in=sesiones, fecha__lte=ahora).order_by('fecha', 'pk')[:20001])
     if len(mensajes) > 20000:
         raise ValueError('La selección supera 20 000 mensajes. Descarga un grupo más pequeño.')
-    mensajes = [m for m in mensajes if sesiones[m.sesion_id].usuario_id == m.usuario_id and sesiones[m.sesion_id].inicio <= m.fecha < sesiones[m.sesion_id].fin]
+    mensajes = [m for m in mensajes if sesiones[m.sesion_id].usuario_id == m.usuario_id
+                and sesiones[m.sesion_id].inicio <= m.fecha
+                and (sesiones[m.sesion_id].fin is None or m.fecha < sesiones[m.sesion_id].fin)]
     anteriores = {}
     relatos = {m.pk: m for m in mensajes if m.remitente == 'usuario'}
     for mensaje in mensajes:
@@ -76,37 +78,36 @@ def crear_excel(usuarios, ahora=None):
             mensaje._pregunta_frecuencia = previo.contenido
         anteriores[(mensaje.usuario_id, mensaje.sesion_id)] = mensaje
     mensajes = {m.pk: m for m in mensajes if m.remitente == 'usuario'}
-    por_sesion, evidencias = defaultdict(list), defaultdict(list)
+    por_usuario, evidencias = defaultdict(list), defaultdict(list)
     for mensaje in mensajes.values():
-        por_sesion[mensaje.sesion_id].append(mensaje)
+        por_usuario[mensaje.usuario_id].append(mensaje)
     candidatas = list(Evidencia.objects.filter(mensaje_id__in=mensajes).order_by('mensaje__fecha', 'pk')[:60001])
     if len(candidatas) > 60000:
         raise ValueError('La selección tiene demasiadas evidencias. Descarga un grupo más pequeño.')
     for evidencia in candidatas:
         evidencia.mensaje = mensajes[evidencia.mensaje_id]
-        evidencias[evidencia.mensaje.sesion_id].append(evidencia)
+        evidencias[evidencia.mensaje.usuario_id].append(evidencia)
 
     libro = Workbook()
     libro.remove(libro.active)
     libro.properties.creator = 'Chatbot Cognitivo'
     libro.properties.title = 'Frecuencias declaradas por indicador'
     columnas = [('ID estudiante', 20)]
-    for periodo in ('Inicial · S1', 'Final · S4'):
-        columnas.extend((f'{periodo} · {meta["nombre"]}', 25) for meta in INDICADORES.values())
+    columnas.extend((f'Actividad · {meta["nombre"]}', 25) for meta in INDICADORES.values())
     resultados = crear_hoja(libro, 'Resultados', columnas)
     resultados.freeze_panes = 'B2'
     resultados.row_dimensions[1].height = 60
     ficha = crear_hoja(libro, 'Ficha', [('Campo', 31), ('Descripción', 115)])
     ficha.freeze_panes = 'A2'
     for fila in [
-        ('Documento', 'Frecuencias declaradas por indicador · versión 2'),
+        ('Documento', 'Frecuencias declaradas por indicador · versión 3'),
         ('Exportado', hora_lima(ahora)),
-        ('Periodo', 'Inicial = semana 1; final = semana 4. Son periodos de conversación, no una medición anterior al uso del sistema.'),
+        ('Periodo', 'Actividad disponible hasta la fecha de exportación, sin dividir en semanas ni suponer una comparación inicial/final. No se asignan fechas de una intervención que todavía no ha sido configurada.'),
         ('Escala', '1 = Nunca; 2 = Rara vez; 3 = Algunas veces; 4 = Casi siempre; 5 = Siempre.'),
-        ('Fuente', 'Expresiones literales del estudiante vinculadas a un indicador y a esta semana. También se acepta una respuesta de frecuencia tras una pregunta semanal inequívoca del chatbot, en la misma sesión y dentro de dos horas. No se adivinan frecuencias.'),
+        ('Fuente', 'Frecuencias explícitas del estudiante vinculadas a un indicador y a un contexto temporal inequívoco. También se admite una respuesta tras una pregunta inequívoca del chatbot, en la misma sesión y dentro de dos horas. Se conservan las expresiones del estudiante; no se adivinan frecuencias.'),
         ('Dificultades', 'Sobrecarga, presión del tiempo y síntomas: mayor valor significa una dificultad relatada con mayor frecuencia.'),
         ('Afrontamiento', 'Planificación, automotivación y búsqueda de soporte: mayor valor significa mayor frecuencia de uso del recurso, no más estrés.'),
-        ('Sin información', 'No hay una frecuencia inequívoca, hay relatos contradictorios, faltan mensajes, quedan análisis pendientes o la semana todavía no finaliza. No equivale a Nunca ni a cero estrés.'),
+        ('Sin información', 'No hay una frecuencia inequívoca, hay relatos contradictorios, faltan mensajes o quedan análisis pendientes. No equivale a Nunca ni a cero estrés.'),
         ('Alcance', 'Registro descriptivo de frecuencia, sin suma global ni clasificación de estrés bajo, medio o alto. No es una escala validada de intensidad, un diagnóstico ni una prueba de eficacia.'),
         ('Identificadores', 'Se usa el ID interno del estudiante. Este archivo no incluye nombres, correos, contraseñas ni conversaciones.'),
     ]:
@@ -118,11 +119,9 @@ def crear_excel(usuarios, ahora=None):
         if perfil and perfil.origen_datos == 'demostracion':
             demos.append(codigo)
         fila = [codigo]
-        for numero in (1, 4):
-            sesion = next((s for s in sesiones.values() if s.usuario_id == usuario.pk and s.numero == numero), None)
-            registros = por_sesion[sesion.pk] if sesion else []
-            completo = bool(sesion and ahora >= sesion.fin and registros and all(m.analisis_estado == 'listo' for m in registros))
-            fila.extend(frecuencia_periodo(evidencias[sesion.pk], indicador, registros) if completo else 'Sin información' for indicador in INDICADORES)
+        registros = por_usuario[usuario.pk]
+        completo = bool(registros and all(m.analisis_estado == 'listo' for m in registros))
+        fila.extend(frecuencia_periodo(evidencias[usuario.pk], indicador, registros) if completo else 'Sin información' for indicador in INDICADORES)
         agregar(resultados, fila)
     if demos:
         agregar(ficha, ('Tipo de datos', 'Demostración: ' + ', '.join(demos) + '. Sus relatos fueron generados para comprobar el sistema; no son observaciones de participantes de investigación.'))

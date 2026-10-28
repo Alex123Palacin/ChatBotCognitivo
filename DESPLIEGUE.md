@@ -1,5 +1,7 @@
 # Desplegar Chatbot Cognitivo en Dokploy
 
+> Actualización del 28/10/2026: consultar [los cambios de conversación y conservación](CAMBIOS_CHAT_30_DIAS.md) y [la política de 30 días](RETENCION_30_DIAS.md). La interfaz actual ya no se organiza en cuatro semanas. Los apartados históricos de pruebas describen la versión anterior.
+
 La opción es **Compose**, tipo **Docker Compose**, con el archivo `docker-compose.yml` de la raíz. No selecciones Stack: este proyecto construye imágenes desde el repositorio.
 
 ## 1. Preparar las variables

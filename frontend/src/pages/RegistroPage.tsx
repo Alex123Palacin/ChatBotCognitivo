@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import MarcoAuthComp from '../components/auth/MarcoAuthComp'
 import { useAuth } from '../hooks/useAuth'
 import BotonUI from '../ui/BotonUI'
 import InputUI from '../ui/InputUI'
+import { obtenerTerminosRegistro } from '../api/authApi'
+import type { TerminosRegistro } from '../types/auth'
 
 function RegistroPage() {
   const { registrar } = useAuth()
@@ -15,17 +17,37 @@ function RegistroPage() {
   const [acepta, setAcepta] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
+  const [terminos, setTerminos] = useState<TerminosRegistro | null>(null)
+  const [errorTerminos, setErrorTerminos] = useState('')
+  const [intentoTerminos, setIntentoTerminos] = useState(0)
+
+  useEffect(() => {
+    let vigente = true
+    void obtenerTerminosRegistro().then((datos) => {
+      if (vigente) setTerminos(datos)
+    }).catch((fallo: unknown) => {
+      if (vigente) setErrorTerminos(fallo instanceof Error ? fallo.message : 'No se pudieron cargar los términos.')
+    })
+    return () => { vigente = false }
+  }, [intentoTerminos])
+
+  function reintentarTerminos() {
+    setTerminos(null)
+    setAcepta(false)
+    setErrorTerminos('')
+    setIntentoTerminos((actual) => actual + 1)
+  }
 
   async function enviar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (enviando) return
     if (password !== confirmacion) { setError('Las contraseñas no coinciden.'); return }
     if (!email.trim().toLowerCase().endsWith('@gmail.com')) { setError('Utiliza tu dirección de Gmail para crear la cuenta.'); return }
-    if (!acepta) { setError('Revisa y acepta el uso de la conversación antes de continuar.'); return }
+    if (!terminos || !acepta) { setError('Lee y acepta los términos de conservación de 30 días antes de continuar.'); return }
     setEnviando(true)
     setError('')
     try {
-      await registrar(nombre, email, password)
+      await registrar(nombre, email, password, { acepta_terminos: acepta, version_terminos: terminos.version })
       navigate('/chat', { replace: true })
     } catch (fallo) {
       setError(fallo instanceof Error ? fallo.message : 'No se pudo crear la cuenta.')
@@ -35,7 +57,7 @@ function RegistroPage() {
   }
 
   return (
-    <MarcoAuthComp titulo="Crea tu cuenta" descripcion="Tendrás un chat personal que podrás continuar durante cuatro semanas.">
+    <MarcoAuthComp titulo="Crea tu cuenta" descripcion="Tendrás un chat personal para conversar a tu ritmo.">
       <form onSubmit={enviar} className="space-y-5">
         <InputUI id="nombre" etiqueta="¿Cómo te llamas?" autoComplete="given-name" required maxLength={80} value={nombre} onChange={(event) => setNombre(event.target.value)} disabled={enviando} />
         <InputUI id="email" etiqueta="Tu dirección de Gmail" type="email" autoComplete="username" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} disabled={enviando} placeholder="tuusuario@gmail.com" />
@@ -44,12 +66,17 @@ function RegistroPage() {
           <p className="mt-2 text-xs leading-relaxed text-slate-500">Usa al menos 8 caracteres. Esta contraseña pertenece a Chatbot Cognitivo; no escribas la de tu Gmail.</p>
         </div>
         <InputUI id="confirmacion" etiqueta="Repite tu contraseña" type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={confirmacion} onChange={(event) => setConfirmacion(event.target.value)} disabled={enviando} />
-        <label className="flex items-start gap-3 rounded-xl bg-blue-50/70 p-4 text-xs leading-relaxed text-slate-600">
-          <input type="checkbox" required checked={acepta} onChange={(event) => setAcepta(event.target.checked)} disabled={enviando} className="mt-0.5 size-4 shrink-0 accent-blue-600" />
-          <span>Entiendo que mi conversación se guardará y se analizará para generar reportes semanales. El administrador podrá ver esos reportes y los fragmentos que los sustentan. Los resultados son orientativos y no constituyen un diagnóstico.</span>
-        </label>
+        <div className="rounded-xl bg-blue-50/70 p-4 text-xs leading-relaxed text-slate-600">
+          <h2 className="font-semibold text-slate-800">Uso y conservación de tu conversación</h2>
+          <p className="mt-2">Tu conversación se analizará para generar reportes orientativos. El administrador podrá verlos y consultar los fragmentos que los sustentan. Los resultados no constituyen un diagnóstico.</p>
+          {terminos ? <p id="terminos-retencion" className="mt-2">{terminos.texto}</p> : errorTerminos ? <div className="mt-2"><p role="alert" className="text-red-700">{errorTerminos}</p><button type="button" onClick={reintentarTerminos} className="mt-2 min-h-10 font-semibold text-blue-700 underline">Volver a cargar los términos</button></div> : <p role="status" className="mt-2">Consultando los términos de conservación…</p>}
+          <label className="mt-3 flex items-start gap-3">
+            <input type="checkbox" required checked={acepta} onChange={(event) => setAcepta(event.target.checked)} disabled={enviando || !terminos} aria-describedby={terminos ? 'terminos-retencion' : undefined} className="mt-0.5 size-4 shrink-0 accent-blue-600" />
+            <span>Acepto este uso de mi conversación y la eliminación automática de mis mensajes nuevos al cumplir 30 días desde su envío.</span>
+          </label>
+        </div>
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-        <BotonUI type="submit" className="w-full" disabled={enviando}>{enviando ? 'Creando cuenta…' : 'Crear cuenta y comenzar'}</BotonUI>
+        <BotonUI type="submit" className="w-full" disabled={enviando || !terminos || !acepta}>{enviando ? 'Creando cuenta…' : 'Crear cuenta y comenzar'}</BotonUI>
       </form>
       <p className="mt-6 text-center text-sm text-slate-500">¿Ya tienes una cuenta? <Link to="/login" className="font-semibold text-blue-600 hover:underline">Iniciar sesión</Link></p>
     </MarcoAuthComp>

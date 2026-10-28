@@ -1,5 +1,5 @@
 import { peticionApi } from './http.ts'
-import type { RespuestaAuth, Usuario } from '../types/auth'
+import type { AceptacionTerminos, RespuestaAuth, TerminosRegistro, Usuario } from '../types/auth'
 
 function validarUsuario(valor: unknown): Usuario {
   if (!valor || typeof valor !== 'object') throw new Error('Django devolvió una sesión no válida.')
@@ -25,8 +25,21 @@ export async function iniciarSesionApi(identificador: string, password: string):
   return { usuario: validarUsuario(datos.usuario) }
 }
 
-export async function registrarApi(nombre: string, email: string, password: string): Promise<RespuestaAuth> {
-  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/registro/', { method: 'POST', body: { nombre, email, password } })
+export async function obtenerTerminosRegistro(): Promise<TerminosRegistro> {
+  const datos = await peticionApi<TerminosRegistro>('/api/auth/terminos/')
+  if (!datos || typeof datos.version !== 'string' || !datos.version.trim()
+    || datos.dias_retencion !== 30 || typeof datos.texto !== 'string' || !datos.texto.trim()
+    || datos.alcance !== 'mensajes_nuevos' || datos.copias_seguridad !== 'gestion_separada') {
+    throw new Error('No se pudieron comprobar los términos de conservación. Vuelve a intentarlo.')
+  }
+  return datos
+}
+
+export async function registrarApi(nombre: string, email: string, password: string, aceptacion: AceptacionTerminos): Promise<RespuestaAuth> {
+  if (aceptacion?.acepta_terminos !== true || !aceptacion.version_terminos?.trim()) {
+    throw new Error('Lee y acepta los términos de conservación antes de crear tu cuenta.')
+  }
+  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/registro/', { method: 'POST', body: { nombre, email, password, acepta_terminos: aceptacion.acepta_terminos, version_terminos: aceptacion.version_terminos } })
   return { usuario: validarUsuario(datos.usuario) }
 }
 

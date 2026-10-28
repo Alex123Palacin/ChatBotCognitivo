@@ -3,7 +3,7 @@ import { formatearPeriodo } from '../../utils/fechas'
 import DimensionReporteComp from './DimensionReporteComp'
 
 const etiquetas: Record<CoberturaReporte['estado'], string> = {
-  sin_mensajes: 'Sin mensajes en esta semana',
+  sin_mensajes: 'Sin mensajes en este periodo',
   analisis_pendiente: 'Análisis en curso',
   sin_evidencia: 'Sin evidencia suficiente',
   parcial: 'Cobertura parcial de los indicadores',
@@ -16,11 +16,11 @@ function ReporteActualComp({ reporte }: { reporte: ReporteActual }) {
     <section aria-label="Análisis actual de la conversación" className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold">Análisis actual · Semana {reporte.numero}</h2>
-          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">{reporte.estado === 'en_curso' ? 'Semana en curso' : 'Semana finalizada'}</span>
+          <h2 className="text-xl font-semibold">Análisis actual de la conversación</h2>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700">{reporte.estado === 'en_curso' ? 'En curso' : 'Finalizado'}</span>
         </div>
         <p className="mt-2 text-xs leading-relaxed text-slate-500">{formatearPeriodo(reporte.inicio, reporte.fin)}</p>
-        <p className="mt-3 text-sm leading-relaxed text-slate-500">El análisis se actualiza con los mensajes procesados. El reporte semanal se conserva al finalizar el periodo.</p>
+        <p className="mt-3 text-sm leading-relaxed text-slate-500">El análisis se actualiza con los mensajes procesados de la conversación.</p>
         <div className={`mt-5 rounded-xl border p-4 ${cobertura.estado === 'completa' ? 'border-blue-200 bg-blue-50/70' : 'border-slate-200 bg-slate-50/70'}`}>
           <h3 className="text-sm font-semibold text-slate-800">{etiquetas[cobertura.estado]}</h3>
           <p className="mt-2 text-sm leading-relaxed text-slate-600">{cobertura.mensaje}</p>
@@ -30,7 +30,7 @@ function ReporteActualComp({ reporte }: { reporte: ReporteActual }) {
           <p className="mt-3 text-xs leading-relaxed text-slate-500">{cobertura.puede_describir_indicadores ? 'Los fragmentos disponibles permiten describir los indicadores que tienen evidencia.' : 'Aún falta evidencia para describir los indicadores de esta conversación.'} Esta descripción es orientativa y no establece un diagnóstico ni un nivel de estrés.</p>
         </div>
         <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
-          <span>{reporte.mensajes_estudiante} mensajes del estudiante esta semana</span>
+          <span>{reporte.mensajes_estudiante} mensajes del estudiante en este periodo</span>
           <span>{cobertura.mensajes_analizados} mensajes analizados</span>
           <span>{cobertura.analisis_pendientes} análisis pendientes</span>
           <span>{reporte.total_evidencias} fragmentos de evidencia</span>

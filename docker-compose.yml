@@ -14,6 +14,7 @@ x-backend: &backend
     DJANGO_DB_PATH: /data/db.sqlite3
     OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
     OLLAMA_MODEL: ${OLLAMA_MODEL:-deepseek-r1:8b}
+    OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:1.7b}
     OLLAMA_NUM_GPU: ${OLLAMA_NUM_GPU:-0}
     OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
     OLLAMA_CHAT_MAX_TOKENS: ${OLLAMA_CHAT_MAX_TOKENS:-192}
@@ -92,6 +93,7 @@ services:
     environment:
       OLLAMA_HOST: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-deepseek-r1:8b}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:1.7b}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -104,11 +106,18 @@ services:
           fi
           sleep 2
         done
-        if ollama show "$$OLLAMA_MODEL" >/dev/null 2>&1; then
-          echo "El modelo solicitado ya está disponible."
-          exit 0
-        fi
-        exec ollama pull "$$OLLAMA_MODEL"
+        preparado=''
+        for solicitado in "$$OLLAMA_CHAT_MODEL" "$$OLLAMA_MODEL"; do
+          if [ "$$solicitado" = "$$preparado" ]; then
+            continue
+          fi
+          if ollama show "$$solicitado" >/dev/null 2>&1; then
+            echo "El modelo $$solicitado ya está disponible."
+          else
+            ollama pull "$$solicitado" || exit $$?
+          fi
+          preparado="$$solicitado"
+        done
     networks:
       - aplicacion
 

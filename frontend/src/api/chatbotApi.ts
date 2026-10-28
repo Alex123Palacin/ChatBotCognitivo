@@ -17,7 +17,7 @@ export async function obtenerChat(signal?: AbortSignal): Promise<EstadoChat> {
 }
 
 export async function enviarMensajeChat(datos: SolicitudChat, signal: AbortSignal): Promise<EstadoChat> {
-  // El análisis semanal se procesa por separado; aquí esperamos solo la respuesta del chat.
+  // El análisis se procesa por separado; aquí esperamos solo la respuesta del chat.
   return validarChat(await peticionApi<EstadoChat>('/api/chat/', {
     method: 'POST', body: datos, signal, timeout: 195_000,
   }))

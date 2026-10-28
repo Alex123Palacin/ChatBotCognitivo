@@ -11,6 +11,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/csrf/', auth_views.csrf),
     path('api/auth/registro/', auth_views.registro),
+    path('api/auth/terminos/', auth_views.terminos),
     path('api/auth/login/', auth_views.iniciar_sesion),
     path('api/auth/logout/', auth_views.cerrar_sesion),
     path('api/auth/me/', auth_views.me),

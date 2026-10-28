@@ -4,10 +4,11 @@ from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 
 from reportes.services import procesar_pendientes
+from usuarios.retencion import limpiar_conversaciones
 
 
 class Command(BaseCommand):
-    help = 'Analiza mensajes pendientes y genera reportes al cerrar cada semana. No necesita visitas al chat.'
+    help = 'Analiza mensajes pendientes, actualiza reportes y aplica la conservación aceptada de 30 días.'
 
     def add_arguments(self, parser):
         parser.add_argument('--continuo', action='store_true', help='Mantiene activo el procesamiento automático.')
@@ -16,11 +17,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         intervalo = max(1, options['intervalo'])
-        self.stdout.write('Procesador semanal iniciado. Las fechas de cierre se consultan en la base de datos.')
+        self.stdout.write('Procesador de conversaciones iniciado. Los plazos se consultan en la base de datos.')
         try:
             while True:
                 close_old_connections()
                 try:
+                    limpieza = limpiar_conversaciones(aplicar=True)
+                    if limpieza['mensajes_eliminados']:
+                        self.stdout.write(f"Mensajes eliminados por su plazo aceptado: {limpieza['mensajes_eliminados']}.")
                     cantidad = procesar_pendientes(limite=max(1, options['limite']))
                     if cantidad:
                         self.stdout.write(f'Mensajes analizados: {cantidad}.')
@@ -33,4 +37,4 @@ class Command(BaseCommand):
                     break
                 time.sleep(intervalo)
         except KeyboardInterrupt:
-            self.stdout.write('Procesador semanal detenido.')
+            self.stdout.write('Procesador de conversaciones detenido.')

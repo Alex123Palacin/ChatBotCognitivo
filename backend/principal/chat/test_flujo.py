@@ -43,7 +43,8 @@ class FlujoChatTests(TestCase):
         self.assertEqual(Mensaje.objects.count(), 2)
         self.usuario.perfil.refresh_from_db()
         self.assertIsNone(self.usuario.perfil.respuesta_hasta)
-        self.assertEqual(len(resto[-1]['chat']['sesiones']), 4)
+        self.assertEqual(len(resto[-1]['chat']['sesiones']), 1)
+        self.assertIsNone(resto[-1]['chat']['sesion_actual']['fin'])
         iterador.close()
 
     @patch('chat.services.responder_conversacion_stream')

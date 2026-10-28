@@ -12,7 +12,7 @@ export interface SesionSemanal {
   id: number
   numero: number
   inicio: string
-  fin: string
+  fin: string | null
   estado: 'activa' | 'pendiente' | 'cerrada'
   reporte_id: number | null
 }

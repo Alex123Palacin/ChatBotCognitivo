@@ -188,9 +188,9 @@ def sintetizar_indicador(evidencias):
             if observacion:
                 ultimas[item["senal"]] = observacion
     if not ultimas:
-        return "Sin información suficiente en la conversación de esta semana."
+        return "Sin información suficiente en la conversación disponible."
     etiquetas = {"dificultad": "Dificultades mencionadas", "recurso": "Recursos relatados", "ausencia_explicita": "Negaciones o ausencias expresadas"}
     partes = [f"{etiquetas[senal]}: {ultimas[senal]}" for senal in SENALES if senal in ultimas]
     if len(ultimas) > 1:
-        partes.append("Se conservan los distintos relatos de la semana; no se asume mejoría ni empeoramiento.")
+        partes.append("Se conservan los distintos relatos de la conversación; no se asume mejoría ni empeoramiento.")
     return " ".join(partes)

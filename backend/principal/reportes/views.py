@@ -10,7 +10,7 @@ from principal.http import acceso, error
 from sesiones.models import SesionSemanal
 from sesiones.services import sesion_json
 from .models import ReporteSemanal
-from .services import NOTA_METODO, dimensiones_json, resumen_json, reporte_actual_json
+from .services import NOTA_METODO, dimensiones_json, resumen_json, reporte_conversacion_json
 
 User = get_user_model()
 
@@ -19,9 +19,8 @@ def alumno_json(usuario, ahora=None):
     ahora = ahora or timezone.now()
     perfil = getattr(usuario, 'perfil', None)
     ultima = perfil.ultima_actividad if perfil else None
-    semana = usuario.semanas.filter(inicio__lte=ahora, fin__gt=ahora).first()
     actividad = usuario.mensajes_chat.filter(remitente='usuario').annotate(dia=TruncDate('fecha')).aggregate(primero=Min('fecha'), ultimo=Max('fecha'), dias=Count('dia', distinct=True), cantidad=Count('id'), analizados=Count('id', filter=Q(analisis_estado='listo')))
-    return {'id': usuario.pk, 'nombre': usuario.first_name, 'email': usuario.email, 'ultima_actividad': ultima.isoformat() if ultima else None, 'en_linea': bool(perfil and perfil.conectado and ultima and ultima >= ahora - timedelta(minutes=5)), 'semana_actual': semana.numero if semana else None, 'reportes_total': ReporteSemanal.objects.filter(sesion__usuario=usuario).count(), 'primer_mensaje': actividad['primero'].isoformat() if actividad['primero'] else None, 'ultimo_mensaje': actividad['ultimo'].isoformat() if actividad['ultimo'] else None, 'inicio_programa': perfil.inicio_programa.isoformat() if perfil and perfil.inicio_programa else None, 'dias_conversacion': actividad['dias'], 'mensajes_estudiante': actividad['cantidad'], 'mensajes_analizados': actividad['analizados'], 'analisis_pendientes': actividad['cantidad'] - actividad['analizados']}
+    return {'id': usuario.pk, 'nombre': usuario.first_name, 'email': usuario.email, 'ultima_actividad': ultima.isoformat() if ultima else None, 'en_linea': bool(perfil and perfil.conectado and ultima and ultima >= ahora - timedelta(minutes=5)), 'semana_actual': None, 'reportes_total': ReporteSemanal.objects.filter(sesion__usuario=usuario).count(), 'primer_mensaje': actividad['primero'].isoformat() if actividad['primero'] else None, 'ultimo_mensaje': actividad['ultimo'].isoformat() if actividad['ultimo'] else None, 'inicio_programa': perfil.inicio_programa.isoformat() if perfil and perfil.inicio_programa else None, 'dias_conversacion': actividad['dias'], 'mensajes_estudiante': actividad['cantidad'], 'mensajes_analizados': actividad['analizados'], 'analisis_pendientes': actividad['cantidad'] - actividad['analizados']}
 
 
 @acceso(['GET'], administrador=True)
@@ -38,10 +37,7 @@ def alumno(request, alumno_id):
     ahora = timezone.now()
     sesiones = list(SesionSemanal.objects.filter(usuario=usuario).select_related('reporte'))
     reportes = ReporteSemanal.objects.filter(sesion__usuario=usuario).select_related('sesion')
-    actual = next((s for s in sesiones if s.inicio <= ahora < s.fin), None)
-    if actual is None and sesiones and ahora >= sesiones[-1].fin:
-        actual = sesiones[-1]
-    return JsonResponse({'alumno': alumno_json(usuario, ahora), 'sesiones': [sesion_json(s, ahora) for s in sesiones], 'reportes': [resumen_json(r) for r in reportes], 'reporte_actual': reporte_actual_json(actual, ahora) if actual else None})
+    return JsonResponse({'alumno': alumno_json(usuario, ahora), 'sesiones': [sesion_json(s, ahora) for s in sesiones], 'reportes': [resumen_json(r) for r in reportes], 'reporte_actual': reporte_conversacion_json(usuario, ahora)})
 
 
 @acceso(['GET'], administrador=True)
@@ -64,6 +60,6 @@ def exportar(request):
         return error('No se encontró alguno de los estudiantes seleccionados.', 404)
     respuesta = HttpResponse(crear_excel(usuarios), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     fecha = timezone.localdate().isoformat()
-    respuesta['Content-Disposition'] = f'attachment; filename="evaluacion-inicial-final-{fecha}.xlsx"'
+    respuesta['Content-Disposition'] = f'attachment; filename="evaluacion-conversaciones-{fecha}.xlsx"'
     respuesta['X-Content-Type-Options'] = 'nosniff'
     return respuesta

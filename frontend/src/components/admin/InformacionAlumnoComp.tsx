@@ -3,7 +3,7 @@ import { formatearFecha, formatearTiempoDesde } from '../../utils/fechas'
 
 function InformacionAlumnoComp({ alumno }: { alumno: Alumno }) {
   const fechas = [
-    { nombre: 'Inicio del programa', valor: alumno.inicio_programa ? formatearFecha(alumno.inicio_programa, true) : 'Aún no iniciado' },
+    { nombre: 'Inicio del acompañamiento', valor: alumno.inicio_programa ? formatearFecha(alumno.inicio_programa, true) : 'Aún no iniciado' },
     { nombre: 'Primer mensaje', valor: alumno.primer_mensaje ? formatearFecha(alumno.primer_mensaje, true) : 'Sin mensajes' },
     { nombre: 'Último mensaje', valor: alumno.ultimo_mensaje ? formatearFecha(alumno.ultimo_mensaje, true) : 'Sin mensajes' },
     { nombre: 'Última actividad', valor: formatearFecha(alumno.ultima_actividad, true) },

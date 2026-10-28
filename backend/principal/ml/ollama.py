@@ -167,9 +167,10 @@ def _keep_alive():
     return int(valor) if valor.lstrip('-').isdigit() else valor
 
 
-def _solicitud(mensajes, formato, temperatura, limite, stream, directo):
+def _solicitud(mensajes, formato, temperatura, limite, stream, directo, modelo=None):
+    modelo = modelo or settings.OLLAMA_MODEL
     datos = {
-        "model": settings.OLLAMA_MODEL,
+        "model": modelo,
         "messages": mensajes,
         "stream": stream,
         "think": False,
@@ -185,7 +186,7 @@ def _solicitud(mensajes, formato, temperatura, limite, stream, directo):
         # Ollama recibe directamente el esquema JSON en el campo format.
         datos["format"] = formato
     endpoint = "/api/chat"
-    if directo and settings.OLLAMA_MODEL.startswith("deepseek-r1:8b"):
+    if directo and modelo.startswith("deepseek-r1:8b"):
         # La plantilla verificada del DeepSeek instalado comienza en la respuesta
         # final. Conserva los pesos, las instrucciones y todos los turnos elegidos.
         datos.pop("messages")
@@ -194,9 +195,9 @@ def _solicitud(mensajes, formato, temperatura, limite, stream, directo):
     return settings.OLLAMA_URL.rstrip("/") + endpoint, datos
 
 
-def generar(mensajes, formato=None, temperatura=0.4, limite=1800, cancelar=None, timeout=None, directo=False):
+def generar(mensajes, formato=None, temperatura=0.4, limite=1800, cancelar=None, timeout=None, directo=False, modelo=None):
     """Una llamada local a Ollama; sirve para conversar y para extraer evidencias."""
-    url, datos = _solicitud(mensajes, formato, temperatura, limite, cancelar is not None, directo)
+    url, datos = _solicitud(mensajes, formato, temperatura, limite, cancelar is not None, directo, modelo=modelo)
     solicitud = Request(
         url,
         data=json.dumps(datos, ensure_ascii=False).encode("utf-8"),
@@ -287,9 +288,9 @@ class _TextoVisible:
         return texto
 
 
-def generar_flujo(mensajes, temperatura=0.4, limite=192, directo=False, timeout=None):
+def generar_flujo(mensajes, temperatura=0.4, limite=192, directo=False, timeout=None, modelo=None):
     """Entrega palabras en cuanto Ollama las genera, con un plazo total acotado."""
-    url, datos = _solicitud(mensajes, None, temperatura, limite, True, directo)
+    url, datos = _solicitud(mensajes, None, temperatura, limite, True, directo, modelo=modelo)
     filtro = _TextoVisible()
     hay_texto = False
     try:
@@ -322,18 +323,15 @@ def generar_flujo(mensajes, temperatura=0.4, limite=192, directo=False, timeout=
 
 def precalentar_modelo():
     """Carga pesos y el prefijo escolar compartido antes de aceptar conversaciones."""
-    datos = {
-        'model': settings.OLLAMA_MODEL, 'prompt': '', 'stream': False,
-        'keep_alive': _keep_alive(),
-        'options': {'num_ctx': settings.OLLAMA_NUM_CTX, 'num_gpu': settings.OLLAMA_NUM_GPU},
-    }
-    if getattr(settings, 'OLLAMA_CHAT_DIRECT', True) and settings.OLLAMA_MODEL.startswith('deepseek-r1:8b'):
-        from .conversacion import INSTRUCCIONES
-        datos.update({'raw': True, 'prompt': _prompt_directo([{'role': 'system', 'content': INSTRUCCIONES}])})
-        # Un solo token basta para dejar preparado el prefijo común del chat.
-        # Su salida se descarta; no crea mensajes ni un estudiante de prueba.
-        datos['options']['num_predict'] = 1
-    solicitud = Request(settings.OLLAMA_URL.rstrip('/') + '/api/generate',
+    from .conversacion import INSTRUCCIONES
+    # Precargamos el modelo que responderá al estudiante, no el de análisis.
+    # Un token prepara el prefijo compartido y se descarta; no crea registros.
+    url, datos = _solicitud(
+        [{'role': 'system', 'content': INSTRUCCIONES}], None, 0, 1, False,
+        getattr(settings, 'OLLAMA_CHAT_DIRECT', True),
+        modelo=getattr(settings, 'OLLAMA_CHAT_MODEL', 'qwen3:1.7b'),
+    )
+    solicitud = Request(url,
                         data=json.dumps(datos).encode(), headers={'Content-Type': 'application/json'})
     try:
         with urlopen(solicitud, timeout=settings.OLLAMA_TIMEOUT) as respuesta:

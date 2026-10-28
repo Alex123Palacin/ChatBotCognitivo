@@ -20,7 +20,7 @@ function AdminPage() {
   ]
 
   return (
-    <MarcoAdminComp titulo="Panel administrativo" descripcion="Selecciona un estudiante para ver el análisis actual de su conversación y sus reportes semanales. La información se actualiza cada 30 segundos.">
+    <MarcoAdminComp titulo="Panel administrativo" descripcion="Selecciona un estudiante para ver el análisis actual de su conversación y su historial de reportes. La información se actualiza cada 30 segundos.">
       <EstadoCargaComp cargando={cargando} error={error} reintentar={refrescar} />
       {!cargando && <>
         <div className="mb-6 grid gap-4 sm:grid-cols-2">

@@ -83,9 +83,9 @@ def actualizar_reporte(sesion):
     indicadores = {e.indicador for e in evidencias}
     dias = len({timezone.localtime(fecha).date() for fecha in mensajes.values_list('fecha', flat=True)})
     if not cantidad:
-        resumen = 'No hubo mensajes del estudiante durante esta semana. No existe información para describir los indicadores.'
+        resumen = 'No hubo mensajes del estudiante durante este periodo. No existe información para describir los indicadores.'
     elif pendientes:
-        resumen = f'Semana con {cantidad} mensajes del estudiante en {dias} días de conversación. El análisis sigue en preparación ({pendientes} mensajes pendientes).'
+        resumen = f'Periodo con {cantidad} mensajes del estudiante en {dias} días de conversación. El análisis sigue en preparación ({pendientes} mensajes pendientes).'
     elif not total:
         resumen = f'Se registraron {cantidad} mensajes en {dias} días de conversación. No se identificaron citas suficientes para describir los indicadores.'
     else:
@@ -127,7 +127,7 @@ def procesar_pendientes(limite=5, ahora=None):
 
 
 def resumen_json(reporte):
-    return {'id': reporte.pk, 'numero': reporte.sesion.numero, 'inicio': reporte.sesion.inicio.isoformat(), 'fin': reporte.sesion.fin.isoformat(), 'estado': reporte.estado, 'mensajes_estudiante': reporte.mensajes_estudiante, 'total_evidencias': reporte.total_evidencias, 'resumen': reporte.resumen}
+    return {'id': reporte.pk, 'numero': reporte.sesion.numero, 'inicio': reporte.sesion.inicio.isoformat(), 'fin': reporte.sesion.fin.isoformat() if reporte.sesion.fin else None, 'estado': reporte.estado, 'mensajes_estudiante': reporte.mensajes_estudiante, 'total_evidencias': reporte.total_evidencias, 'resumen': reporte.resumen}
 
 
 def evidencias_sesion(sesion):
@@ -160,7 +160,7 @@ def cobertura_conversacion(cantidad, analizados, evidencias):
     pendientes = cantidad - analizados
     if not cantidad:
         estado = 'sin_mensajes'
-        mensaje = 'El estudiante todavía no tiene mensajes en esta semana. No hay información para describir los indicadores.'
+        mensaje = 'El estudiante todavía no tiene mensajes en este periodo. No hay información para describir los indicadores.'
     elif pendientes:
         estado = 'analisis_pendiente'
         mensaje = f'Hay {pendientes} mensajes pendientes de analizar. Actualmente hay citas para {len(indicadores)} de 7 indicadores; la descripción puede ampliarse cuando termine el análisis.'
@@ -185,9 +185,36 @@ def reporte_actual_json(sesion, ahora=None):
     dias = len({timezone.localtime(m['fecha']).date() for m in registros})
     evidencias = evidencias_sesion(sesion)
     cobertura = cobertura_conversacion(cantidad, analizados, evidencias)
-    resumen = f'Semana {sesion.numero}: {cantidad} mensajes del estudiante en {dias} días de conversación; {analizados} analizados y {cantidad - analizados} pendientes. Hay {len(evidencias)} citas para {cobertura["indicadores_con_evidencia"]} de 7 indicadores.'
+    resumen = f'Conversación: {cantidad} mensajes del estudiante en {dias} días de actividad; {analizados} analizados y {cantidad - analizados} pendientes. Hay {len(evidencias)} citas para {cobertura["indicadores_con_evidencia"]} de 7 indicadores.'
     nota = NOTA_METODO + ' La cobertura y la actividad no indican la gravedad del estrés.'
-    estado = 'finalizado' if ahora >= sesion.fin else 'en_curso'
+    estado = 'finalizado' if sesion.fin is not None and ahora >= sesion.fin else 'en_curso'
     if estado == 'en_curso':
-        nota += ' Vista de la semana en curso; el reporte semanal se generará al cierre.'
-    return {'numero': sesion.numero, 'inicio': sesion.inicio.isoformat(), 'fin': sesion.fin.isoformat(), 'estado': estado, 'mensajes_estudiante': cantidad, 'total_evidencias': len(evidencias), 'resumen': resumen, 'nota': nota, 'dimensiones': dimensiones_sesion_json(sesion, evidencias), 'cobertura': cobertura}
+        nota += ' Vista de la conversación en curso; puede actualizarse cuando se analicen más mensajes.'
+    return {'numero': sesion.numero, 'inicio': sesion.inicio.isoformat(), 'fin': sesion.fin.isoformat() if sesion.fin else None, 'estado': estado, 'mensajes_estudiante': cantidad, 'total_evidencias': len(evidencias), 'resumen': resumen, 'nota': nota, 'dimensiones': dimensiones_sesion_json(sesion, evidencias), 'cobertura': cobertura}
+
+
+def reporte_conversacion_json(usuario, ahora=None):
+    """Actividad real disponible: no impone cuatro semanas ni modifica históricos."""
+    ahora = ahora or timezone.now()
+    registros = list(Mensaje.objects.filter(usuario=usuario, remitente='usuario', fecha__lte=ahora).values('fecha', 'analisis_estado'))
+    if not registros:
+        return None
+    candidatas = Evidencia.objects.filter(
+        mensaje__usuario=usuario, mensaje__sesion__usuario=usuario,
+        mensaje__remitente='usuario', mensaje__analisis_estado='listo', mensaje__fecha__lte=ahora,
+    ).select_related('mensaje').order_by('mensaje__fecha', 'pk')
+    evidencias = [e for e in candidatas if e.indicador in INDICADORES and e.senal in SENALES and e.cita.strip() and e.cita in e.mensaje.contenido]
+    cantidad = len(registros)
+    analizados = sum(m['analisis_estado'] == 'listo' for m in registros)
+    dias = len({timezone.localtime(m['fecha']).date() for m in registros})
+    cobertura = cobertura_conversacion(cantidad, analizados, evidencias)
+    inicio = min(m['fecha'] for m in registros)
+    fin = max(m['fecha'] for m in registros)
+    # dimensiones_sesion_json usa únicamente las evidencias proporcionadas.
+    return {
+        'numero': None, 'inicio': inicio.isoformat(), 'fin': fin.isoformat(),
+        'estado': 'en_curso', 'mensajes_estudiante': cantidad, 'total_evidencias': len(evidencias),
+        'resumen': f'Conversación: {cantidad} mensajes del estudiante en {dias} días de actividad; {analizados} analizados y {cantidad - analizados} pendientes. Hay {len(evidencias)} citas para {cobertura["indicadores_con_evidencia"]} de 7 indicadores.',
+        'nota': NOTA_METODO + ' Se muestran las fechas reales de la actividad disponible, sin dividirla en semanas ni suponer una comparación inicial/final.',
+        'dimensiones': dimensiones_sesion_json(None, evidencias), 'cobertura': cobertura,
+    }

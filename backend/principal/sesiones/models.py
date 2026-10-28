@@ -6,7 +6,8 @@ class SesionSemanal(models.Model):
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='semanas')
     numero = models.PositiveSmallIntegerField()
     inicio = models.DateTimeField()
-    fin = models.DateTimeField()
+    # Los periodos históricos conservan su fin; la conversación nueva es abierta.
+    fin = models.DateTimeField(null=True, blank=True)
     estado = models.CharField(max_length=10, default='pendiente', choices=[('pendiente', 'Pendiente'), ('activa', 'Activa'), ('cerrada', 'Cerrada')])
 
     class Meta:

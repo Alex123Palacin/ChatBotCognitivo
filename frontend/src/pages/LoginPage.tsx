@@ -29,7 +29,7 @@ function LoginPage() {
   }
 
   return (
-    <MarcoAuthComp titulo="Bienvenido de nuevo" descripcion="Inicia sesión para continuar tu conversación y tus cuatro semanas de acompañamiento.">
+    <MarcoAuthComp titulo="Bienvenido de nuevo" descripcion="Inicia sesión para continuar tu conversación y tu acompañamiento.">
       {errorConexion && <div role="alert" className="mb-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">{errorConexion}<button type="button" className="mt-2 block font-semibold underline underline-offset-2" onClick={() => { void refrescarUsuario() }}>Comprobar conexión</button></div>}
       <form onSubmit={enviar} className="space-y-5">
         <InputUI id="email" etiqueta="Correo electrónico" type="email" autoComplete="username" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} disabled={enviando} placeholder="tuusuario@gmail.com" />

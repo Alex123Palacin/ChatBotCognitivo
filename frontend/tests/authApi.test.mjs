@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
-import { iniciarSesionApi, obtenerUsuario } from '../src/api/authApi.ts'
+import { iniciarSesionApi, obtenerTerminosRegistro, obtenerUsuario, registrarApi } from '../src/api/authApi.ts'
 
 const fetchOriginal = globalThis.fetch
 const administrador = { id: 1, email: '', nombre: 'Administrador', username: 'admin', es_admin: true }
@@ -33,4 +33,33 @@ test('la comprobación de sesión admite respuestas anteriores sin username y re
   assert.deepEqual(await obtenerUsuario(), { usuario: usuarioAnterior })
   globalThis.fetch = async () => Response.json({ usuario: { ...administrador, username: 42 } })
   await assert.rejects(obtenerUsuario(), /sesión no válida/)
+})
+
+test('registro envía la aceptación explícita y la versión que se mostró al estudiante', async () => {
+  const terminos = { version: 'conversaciones-30-dias-v1', dias_retencion: 30, texto: 'Cada mensaje nuevo se elimina a los 30 días de su envío.', alcance: 'mensajes_nuevos', copias_seguridad: 'gestion_separada' }
+  const estudiante = { id: 2, email: 'ana@gmail.com', nombre: 'Ana', es_admin: false }
+  globalThis.fetch = async (url, opciones) => {
+    if (url === '/api/auth/terminos/') return Response.json(terminos)
+    if (url === '/api/csrf/') return Response.json({ csrfToken: 'token' })
+    assert.equal(url, '/api/auth/registro/')
+    assert.deepEqual(JSON.parse(opciones.body), { nombre: 'Ana', email: 'ana@gmail.com', password: 'Clave!72851', acepta_terminos: true, version_terminos: terminos.version })
+    return Response.json({ usuario: estudiante })
+  }
+  assert.deepEqual(await obtenerTerminosRegistro(), terminos)
+  assert.deepEqual(await registrarApi('Ana', 'ana@gmail.com', 'Clave!72851', { acepta_terminos: true, version_terminos: terminos.version }), { usuario: estudiante })
+})
+
+test('no se solicita registrar una cuenta sin aceptación explícita o sin versión de términos', async () => {
+  let peticiones = 0
+  globalThis.fetch = async () => { peticiones += 1; throw new Error('No debe enviarse una solicitud') }
+  await assert.rejects(registrarApi('Ana', 'ana@gmail.com', 'Clave!72851', { acepta_terminos: false, version_terminos: 'conversaciones-30-dias-v1' }), /acepta los términos/)
+  await assert.rejects(registrarApi('Ana', 'ana@gmail.com', 'Clave!72851', { acepta_terminos: true, version_terminos: '' }), /acepta los términos/)
+  assert.equal(peticiones, 0)
+})
+
+test('un fallo o contrato de términos incompleto impide asumir una política de conservación', async () => {
+  globalThis.fetch = async () => Response.json({ version: 'incompleta', dias_retencion: 30 })
+  await assert.rejects(obtenerTerminosRegistro(), /comprobar los términos/)
+  globalThis.fetch = async () => Response.json({ error: 'Servicio no disponible' }, { status: 503 })
+  await assert.rejects(obtenerTerminosRegistro(), /Servicio no disponible/)
 })

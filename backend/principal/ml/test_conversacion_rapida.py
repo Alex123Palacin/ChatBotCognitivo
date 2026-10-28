@@ -5,6 +5,7 @@ from django.test import SimpleTestCase, override_settings
 from .conversacion import construir_mensajes, normalizar_respuesta_escolar, responder_conversacion, responder_conversacion_stream
 
 
+@override_settings(OLLAMA_CHAT_MODEL='qwen3:1.7b')
 class ConversacionEscolarRapidaTests(SimpleTestCase):
     def test_contexto_es_colegio_y_conserva_seguridad_y_conversacion_libre(self):
         instrucciones = construir_mensajes([{"role": "user", "content": "Estoy cansada"}])[0]["content"]
@@ -14,6 +15,8 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
             "1 a 3 frases breves",
             "nunca un cuestionario",
             "muchas respuestas no necesitan preguntas",
+            "Cuando pida una idea concreta, dásela directamente",
+            "Si pide una respuesta sin preguntas, no incluyas preguntas",
             "No diagnostiques",
             "adulto de\nconfianza",
             "No prometas confidencialidad absoluta",
@@ -41,7 +44,14 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
         with patch("ml.conversacion.generar_flujo", return_value=(parte for parte in ["Te ", "escucho."])) as progresiva:
             self.assertEqual(list(responder_conversacion_stream(historial, contexto)), ["Te ", "escucho."])
         self.assertEqual(completa.call_args, progresiva.call_args)
-        self.assertEqual(completa.call_args.kwargs, {"directo": True, "limite": 192})
+        self.assertEqual(completa.call_args.kwargs, {"directo": True, "limite": 192, "modelo": "qwen3:1.7b"})
+
+    @override_settings(OLLAMA_MODEL='deepseek-r1:8b', OLLAMA_CHAT_MODEL='qwen3:1.7b',
+                       OLLAMA_CHAT_DIRECT=False, OLLAMA_CHAT_MAX_TOKENS=512)
+    def test_modelo_rapido_independiente_del_analisis_sin_presupuesto_de_razonamiento(self):
+        with patch('ml.conversacion.generar', return_value='Podemos empezar por una tarea.') as modelo:
+            responder_conversacion([{'role': 'user', 'content': 'No sé organizar mis tareas'}])
+        self.assertEqual(modelo.call_args.kwargs, {'directo': False, 'limite': 192, 'modelo': 'qwen3:1.7b'})
 
     def test_stream_no_espera_que_finalice_toda_la_generacion(self):
         consumidos = []

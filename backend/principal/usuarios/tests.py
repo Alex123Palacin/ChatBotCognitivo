@@ -9,6 +9,7 @@ from django.core.management.base import CommandError
 from django.test import Client, TestCase, override_settings
 
 from usuarios.models import Perfil
+from usuarios.retencion import VERSION_TERMINOS
 
 
 class CuentasTests(TestCase):
@@ -16,6 +17,8 @@ class CuentasTests(TestCase):
         cache.clear()
 
     def post(self, ruta, datos, cliente=None):
+        if ruta == '/api/auth/registro/':
+            datos = {'acepta_terminos': True, 'version_terminos': VERSION_TERMINOS, **datos}
         return (cliente or self.client).post(ruta, json.dumps(datos), content_type='application/json')
 
     def test_registro_gmail_guarda_hash_e_inicia_sesion(self):
@@ -72,7 +75,7 @@ class CuentasTests(TestCase):
 
     def test_mutaciones_requieren_csrf_real(self):
         cliente = Client(enforce_csrf_checks=True)
-        datos = {'email': 'csrf@gmail.com', 'password': 'SolBosque!7285'}
+        datos = {'email': 'csrf@gmail.com', 'password': 'SolBosque!7285', 'acepta_terminos': True, 'version_terminos': VERSION_TERMINOS}
         self.assertEqual(self.post('/api/auth/registro/', datos, cliente).status_code, 403)
         token = cliente.get('/api/csrf/').json()['csrfToken']
         self.assertEqual(cliente.post('/api/auth/registro/', json.dumps(datos), content_type='application/json', HTTP_X_CSRFTOKEN=token).status_code, 201)

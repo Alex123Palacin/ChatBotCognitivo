@@ -11,17 +11,23 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from principal.http import acceso, datos_json, error
 from .models import Perfil
+from .retencion import DIAS_RETENCION, VERSION_TERMINOS, politica_json
 
 User = get_user_model()
 
 
 def usuario_json(usuario):
+    perfil = getattr(usuario, 'perfil', None)
+    aceptados = bool(perfil and perfil.terminos_aceptados_en and perfil.terminos_version == VERSION_TERMINOS)
     return {
         'id': usuario.pk,
         'username': usuario.username,
         'email': usuario.email,
         'nombre': usuario.first_name,
         'es_admin': usuario.is_staff,
+        'terminos_aceptados': aceptados,
+        'retencion_dias': DIAS_RETENCION if aceptados else None,
+        'version_terminos': perfil.terminos_version if aceptados else None,
     }
 
 
@@ -29,6 +35,11 @@ def usuario_json(usuario):
 @acceso(['GET'], publico=True)
 def csrf(request):
     return JsonResponse({'csrfToken': get_token(request)})
+
+
+@acceso(['GET'], publico=True)
+def terminos(request):
+    return JsonResponse(politica_json())
 
 
 @acceso(['GET'], publico=True)
@@ -45,6 +56,10 @@ def me(request):
 @acceso(['POST'], publico=True)
 def registro(request):
     datos = datos_json(request)
+    if datos.get('acepta_terminos') is not True:
+        return error('Debes aceptar los términos y la eliminación automática de los mensajes a los 30 días para crear tu cuenta.')
+    if datos.get('version_terminos') != VERSION_TERMINOS:
+        return error('Los términos han cambiado. Actualiza la página y vuelve a leerlos antes de aceptar.')
     email = str(datos.get('email', '')).strip().lower()
     password = datos.get('password', '')
     nombre = str(datos.get('nombre', '')).strip()
@@ -67,7 +82,11 @@ def registro(request):
         with transaction.atomic():
             usuario.set_password(password)
             usuario.save()
-            Perfil.objects.create(usuario=usuario, ultima_actividad=timezone.now(), conectado=True)
+            ahora = timezone.now()
+            Perfil.objects.create(
+                usuario=usuario, ultima_actividad=ahora, conectado=True,
+                terminos_version=VERSION_TERMINOS, terminos_aceptados_en=ahora,
+            )
     except IntegrityError:
         return error('Ya existe una cuenta con ese Gmail. Inicia sesión.', 409)
     login(request, usuario)

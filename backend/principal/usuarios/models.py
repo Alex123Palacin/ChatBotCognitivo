@@ -10,6 +10,8 @@ class Perfil(models.Model):
     respuesta_hasta = models.DateTimeField(null=True, blank=True)
     respuesta_token = models.CharField(max_length=36, blank=True)
     origen_datos = models.CharField(max_length=20, default='conversacion', choices=[('conversacion', 'Interacción registrada'), ('demostracion', 'Demostración')])
+    terminos_version = models.CharField(max_length=60, blank=True)
+    terminos_aceptados_en = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.usuario.email

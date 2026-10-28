@@ -105,7 +105,7 @@ class ConversacionTests(SimpleTestCase):
         self.assertTrue(modelo.call_args.kwargs["directo"])
         self.assertEqual(modelo.call_args.kwargs["limite"], 128)
 
-    @override_settings(OLLAMA_CHAT_DIRECT=False, OLLAMA_CHAT_MAX_TOKENS=512)
+    @override_settings(OLLAMA_CHAT_MODEL='deepseek-r1:8b', OLLAMA_CHAT_DIRECT=False, OLLAMA_CHAT_MAX_TOKENS=512)
     def test_modo_nativo_conserva_presupuesto_para_razonamiento(self):
         with patch("ml.conversacion.generar", return_value="Hola") as modelo:
             responder_conversacion([{"role": "user", "content": "Tengo tareas para mañana"}])

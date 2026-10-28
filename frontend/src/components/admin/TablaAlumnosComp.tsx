@@ -11,7 +11,7 @@ function TablaAlumnosComp({ alumnos, hayRegistrados }: { alumnos: Alumno[]; hayR
           <tr>
             <th scope="col" className="px-5 py-4">Estudiante</th>
             <th scope="col" className="px-5 py-4">Actividad</th>
-            <th scope="col" className="px-5 py-4">Semana</th>
+            <th scope="col" className="px-5 py-4">Primer mensaje</th>
             <th scope="col" className="px-5 py-4">Mensajes</th>
             <th scope="col" className="px-5 py-4">Reportes</th>
             <th scope="col" className="px-5 py-4"><span className="sr-only">Ver estudiante</span></th>
@@ -27,9 +27,9 @@ function TablaAlumnosComp({ alumnos, hayRegistrados }: { alumnos: Alumno[]; hayR
                 <span className={`whitespace-nowrap text-xs ${alumno.en_linea ? 'text-emerald-700' : 'text-slate-500'}`}>{alumno.en_linea ? 'Activo recientemente' : 'Sin actividad reciente'}</span>
                 <p className="mt-1 whitespace-nowrap text-xs text-slate-400">{formatearFecha(alumno.ultima_actividad, true)}</p>
               </td>
-              <td className="px-5 py-5 whitespace-nowrap text-slate-600">{alumno.semana_actual ? `${alumno.semana_actual} de 4` : 'Sin semana activa'}</td>
+              <td className="px-5 py-5 whitespace-nowrap text-slate-600">{alumno.primer_mensaje ? formatearFecha(alumno.primer_mensaje, true) : 'Sin mensajes'}</td>
               <td className="px-5 py-5 text-slate-600">{alumno.mensajes_estudiante}</td>
-              <td className="px-5 py-5 whitespace-nowrap text-slate-600">{alumno.reportes_total} de 4</td>
+              <td className="px-5 py-5 whitespace-nowrap text-slate-600">{alumno.reportes_total}</td>
               <td className="px-5 py-5"><Link to={`/administrador/alumnos/${alumno.id}`} className="whitespace-nowrap font-semibold text-blue-600 hover:underline">Ver análisis</Link></td>
             </tr>
           ))}

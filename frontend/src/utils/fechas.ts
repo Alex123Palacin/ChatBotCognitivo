@@ -8,8 +8,8 @@ export function formatearFecha(valor: string | null, incluirHora = false): strin
   })
 }
 
-export function formatearPeriodo(inicio: string, fin: string): string {
-  return `${formatearFecha(inicio, true)} — ${formatearFecha(fin, true)}`
+export function formatearPeriodo(inicio: string, fin: string | null): string {
+  return `${formatearFecha(inicio, true)} — ${fin ? formatearFecha(fin, true) : 'En curso'}`
 }
 
 export function formatearTiempoDesde(valor: string | null, ahora = Date.now()): string {

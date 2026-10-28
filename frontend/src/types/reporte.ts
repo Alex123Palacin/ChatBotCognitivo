@@ -54,9 +54,9 @@ export interface CoberturaReporte {
 }
 
 export interface ReporteActual {
-  numero: number
+  numero: number | null
   inicio: string
-  fin: string
+  fin: string | null
   estado: 'en_curso' | 'finalizado'
   mensajes_estudiante: number
   total_evidencias: number

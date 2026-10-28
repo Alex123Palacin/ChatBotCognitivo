@@ -2,18 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { LogOut, MessageCircle, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import type { SesionSemanal } from '../types/chatbot'
 import IconButtonUI from '../ui/IconButtonUI'
 
 interface BarraLateralProps {
   abierto: boolean
   cerrar: () => void
-  sesiones: SesionSemanal[]
-  finalizado: boolean
 }
 
-function BarraLateralComp({ abierto, cerrar, sesiones, finalizado }: BarraLateralProps) {
+function BarraLateralComp({ abierto, cerrar }: BarraLateralProps) {
   const { usuario, cerrarSesion } = useAuth()
+  const aplicaRetencion = usuario?.terminos_aceptados === true && usuario.retencion_dias === 30
   const [error, setError] = useState('')
   const [saliendo, setSaliendo] = useState(false)
   const dialogoRef = useRef<HTMLDialogElement>(null)
@@ -42,26 +40,14 @@ function BarraLateralComp({ abierto, cerrar, sesiones, finalizado }: BarraLatera
           <MessageCircle size={18} className="mt-0.5 shrink-0" />
           <div className="min-w-0">
             <p className="text-[13px] font-semibold">Mi conversación</p>
-            <p className="mt-1 text-xs text-slate-500">Un mismo chat, cuatro semanas</p>
+            <p className="mt-1 text-xs text-slate-500">Un espacio para conversar a tu ritmo</p>
           </div>
         </div>
       </div>
       <div className="mt-8">
-        <p className="mb-3 px-2 text-[10px] font-semibold tracking-[0.13em] text-slate-500 uppercase">Sesiones semanales</p>
-        {sesiones.length === 0 ? <p className="px-2 text-xs leading-5 text-slate-500">Tu primera semana empieza cuando envías tu primer mensaje.</p> : (
-          <ol className="space-y-2">
-            {sesiones.map((sesion) => (
-              <li key={sesion.id} className={`rounded-xl px-3 py-2.5 ${sesion.estado === 'activa' ? 'bg-white shadow-xs' : ''}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-700">Semana {sesion.numero}</span>
-                  <span className={`text-[10px] ${sesion.estado === 'activa' ? 'text-blue-600' : 'text-slate-400'}`}>{sesion.estado === 'activa' ? 'En curso' : sesion.estado === 'cerrada' ? 'Completada' : 'Próxima'}</span>
-                </div>
-                <p className="mt-1 text-[10px] text-slate-400">{new Date(sesion.inicio).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })} · {new Date(sesion.fin).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', timeZone: 'America/Lima' })}</p>
-              </li>
-            ))}
-          </ol>
-        )}
-        {finalizado && <p className="mt-3 px-2 text-xs text-blue-600">Terminaste tus cuatro semanas. Tu historial sigue aquí.</p>}
+        <p className="mb-3 px-2 text-[10px] font-semibold tracking-[0.13em] text-slate-500 uppercase">Sobre tu conversación</p>
+        <p className="px-2 text-xs leading-5 text-slate-500">Puedes seguir compartiendo lo que necesites, sin etapas ni un orden obligatorio.</p>
+        <p className="mt-3 px-2 text-xs leading-5 text-slate-500">{aplicaRetencion ? 'Tus mensajes nuevos se eliminan automáticamente al cumplir 30 días desde su envío, según los términos que aceptaste.' : 'Tu historial actual se conserva. La política de 30 días se aplica a las cuentas nuevas que la aceptan al registrarse.'}</p>
       </div>
       <div className="mt-auto border-t border-slate-200 pt-4">
         <p className="truncate px-3 text-xs font-semibold text-slate-700">{usuario?.nombre || 'Estudiante'}</p>

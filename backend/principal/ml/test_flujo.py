@@ -9,6 +9,7 @@ from .ollama import ErrorModelo, generar_flujo, precalentar_modelo
 
 
 @override_settings(OLLAMA_URL='http://127.0.0.1:11434', OLLAMA_MODEL='deepseek-r1:8b',
+                   OLLAMA_CHAT_MODEL='deepseek-r1:8b',
                    OLLAMA_TIMEOUT=2, OLLAMA_KEEP_ALIVE='-1', OLLAMA_NUM_CTX=4096, OLLAMA_NUM_GPU=0)
 class ModeloFlujoTests(SimpleTestCase):
     def conexion(self, eventos):
@@ -85,7 +86,32 @@ class ModeloFlujoTests(SimpleTestCase):
         self.assertIn('estudiantes de colegio', cuerpo['prompt'])
         self.assertTrue(cuerpo['raw'])
         self.assertEqual(cuerpo['keep_alive'], -1)
-        self.assertEqual(cuerpo['options'], {'num_ctx': 4096, 'num_gpu': 0, 'num_predict': 1})
+        self.assertEqual(cuerpo['options'], {'num_ctx': 4096, 'num_gpu': 0, 'num_predict': 1, 'temperature': 0})
+
+    @override_settings(OLLAMA_CHAT_MODEL='qwen3:1.7b')
+    def test_precalienta_chat_ligero_con_instrucciones_sin_plantilla_deepseek(self):
+        respuesta = MagicMock()
+        respuesta.__enter__.return_value = MagicMock()
+        with patch('ml.ollama.urlopen', return_value=respuesta) as llamada, patch('ml.ollama.json.load', return_value={'done': True}):
+            precalentar_modelo()
+        solicitud = llamada.call_args.args[0]
+        cuerpo = json.loads(solicitud.data)
+        self.assertTrue(solicitud.full_url.endswith('/api/chat'))
+        self.assertEqual(cuerpo['model'], 'qwen3:1.7b')
+        self.assertNotIn('raw', cuerpo)
+        self.assertFalse(cuerpo['think'])
+        self.assertEqual(cuerpo['options']['num_predict'], 1)
+        self.assertIn('estudiantes de colegio', cuerpo['messages'][0]['content'])
+
+    def test_flujo_selecciona_modelo_real_sin_afectar_modelo_analisis(self):
+        conexion = self.conexion([{'message': {'content': 'Te escucho.'}, 'done': True}])
+        with patch('ml.ollama.http.client.HTTPConnection', return_value=conexion):
+            self.assertEqual(''.join(generar_flujo([], directo=True, modelo='qwen3:1.7b')), 'Te escucho.')
+        cuerpo = json.loads(conexion.request.call_args.kwargs['body'])
+        self.assertEqual(cuerpo['model'], 'qwen3:1.7b')
+        self.assertFalse(cuerpo['think'])
+        self.assertNotIn('raw', cuerpo)
+        self.assertEqual(conexion.request.call_args.args[1], '/api/chat')
 
     def test_fallo_precalentamiento_no_impide_abrir_sitio(self):
         salida = StringIO()
