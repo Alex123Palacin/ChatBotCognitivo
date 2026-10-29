@@ -21,20 +21,21 @@ class CuentasTests(TestCase):
             datos = {'acepta_terminos': True, 'version_terminos': VERSION_TERMINOS, **datos}
         return (cliente or self.client).post(ruta, json.dumps(datos), content_type='application/json')
 
-    def test_registro_gmail_guarda_hash_e_inicia_sesion(self):
-        respuesta = self.post('/api/auth/registro/', {'email': ' ALUMNA@GMAIL.COM ', 'nombre': 'Ana', 'password': 'SolBosque!7285'})
+    def test_registro_usuario_guarda_hash_e_inicia_sesion(self):
+        respuesta = self.post('/api/auth/registro/', {'username': ' ESTUDIANTE49 ', 'nombre': 'Ana', 'password': 'SolBosque!7285'})
         self.assertEqual(respuesta.status_code, 201)
         usuario = get_user_model().objects.get()
-        self.assertEqual(usuario.email, 'alumna@gmail.com')
+        self.assertEqual(usuario.username, 'estudiante49')
+        self.assertEqual(usuario.email, '')
         self.assertTrue(usuario.check_password('SolBosque!7285'))
         self.assertFalse(usuario.is_staff)
         self.assertEqual(self.client.get('/api/auth/me/').json()['usuario']['nombre'], 'Ana')
         self.assertEqual(usuario.semanas.count(), 0)
 
-    def test_registro_rechaza_otro_dominio_clave_debil_y_correo_duplicado(self):
-        datos = {'email': 'ana@example.com', 'password': 'SolBosque!7285'}
+    def test_registro_rechaza_usuario_invalido_clave_debil_y_duplicado(self):
+        datos = {'username': 'ana@example.com', 'password': 'SolBosque!7285'}
         self.assertEqual(self.post('/api/auth/registro/', datos).status_code, 400)
-        datos['email'] = 'ana@gmail.com'
+        datos['username'] = 'ana49'
         datos['password'] = '12345678'
         self.assertEqual(self.post('/api/auth/registro/', datos).status_code, 400)
         datos['password'] = 'SolBosque!7285'
@@ -47,6 +48,51 @@ class CuentasTests(TestCase):
         self.assertEqual(self.post('/api/auth/login/', {'email': 'ANA@gmail.com', 'password': 'SolBosque!7285'}).status_code, 200)
         self.assertEqual(self.post('/api/auth/logout/', {}).status_code, 200)
         self.assertIsNone(self.client.get('/api/auth/me/').json()['usuario'])
+
+    def test_formatos_username_y_limites_ascii(self):
+        for username in ('ab', 'a' * 41, '4alumno', '.ana', 'ana@gmail.com', 'niño', 'álvaro', 'Kevin', 'ana uno', 'ana/uno', None, 49):
+            with self.subTest(username=username):
+                self.assertEqual(self.post('/api/auth/registro/', {'username': username, 'password': 'BosqueLluvia!8724'}).status_code, 400)
+        for username in ('Ana', 'A' * 40, 'Ana.49', 'Ana-49', 'Ana_49'):
+            with self.subTest(username=username):
+                r = self.post('/api/auth/registro/', {'username': username, 'password': 'BosqueLluvia!8724'})
+                self.assertEqual(r.status_code, 201)
+                self.assertEqual(r.json()['usuario']['username'], username.lower())
+
+    def test_no_guarda_correo_ni_concede_privilegios_del_payload(self):
+        r = self.post('/api/auth/registro/', {'username': 'estudiante49', 'nombre': 'Ana', 'password': 'BosqueLluvia!8724', 'email': 'ignorar@example.com', 'is_staff': True, 'is_superuser': True, 'groups': [1]})
+        self.assertEqual(r.status_code, 201)
+        u = get_user_model().objects.get(username='estudiante49')
+        self.assertEqual(u.email, '')
+        self.assertFalse(u.is_staff or u.is_superuser or u.groups.exists() or u.user_permissions.exists())
+        self.assertEqual(self.client.get('/api/admin/alumnos/').status_code, 403)
+        self.assertEqual(self.client.get('/api/auth/me/').json()['usuario']['username'], 'estudiante49')
+        self.assertTrue(u.perfil.terminos_aceptados_en)
+        self.assertEqual(r.json()['usuario']['retencion_dias'], 30)
+
+    def test_duplicado_de_cuenta_anterior_sin_distinguir_mayusculas(self):
+        u = get_user_model().objects.create_user(username='Estudiante49', password='BosqueLluvia!8724')
+        original = u.password
+        r = self.post('/api/auth/registro/', {'username': 'ESTUDIANTE49', 'password': 'BosqueLluvia!8724'})
+        self.assertEqual(r.status_code, 409)
+        self.assertEqual(get_user_model().objects.count(), 1)
+        u.refresh_from_db()
+        self.assertEqual(u.password, original)
+        r = self.post('/api/auth/login/', {'username': 'ESTUDIANTE49', 'password': 'BosqueLluvia!8724'})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()['usuario']['id'], u.pk)
+
+    def test_login_no_elige_entre_identidades_ambiguas(self):
+        for username in ('Estudiante49', 'estudiante49'):
+            get_user_model().objects.create_user(username=username, password='BosqueLluvia!8724')
+        self.assertEqual(self.post('/api/auth/login/', {'username': 'estudiante49', 'password': 'BosqueLluvia!8724'}).status_code, 401)
+
+    def test_username_en_listado_y_detalle_administrativo(self):
+        alumno = get_user_model().objects.create_user(username='estudiante49', password='BosqueLluvia!8724')
+        admin = get_user_model().objects.create_user(username='admin', password='BosqueLluvia!8724', is_staff=True)
+        self.client.force_login(admin)
+        self.assertEqual(self.client.get('/api/admin/alumnos/').json()['alumnos'][0]['username'], 'estudiante49')
+        self.assertEqual(self.client.get(f'/api/admin/alumnos/{alumno.pk}/').json()['alumno']['username'], 'estudiante49')
 
     @override_settings(DEBUG=True)
     def test_login_admite_username_de_estudiante_y_admin(self):
@@ -75,7 +121,7 @@ class CuentasTests(TestCase):
 
     def test_mutaciones_requieren_csrf_real(self):
         cliente = Client(enforce_csrf_checks=True)
-        datos = {'email': 'csrf@gmail.com', 'password': 'SolBosque!7285', 'acepta_terminos': True, 'version_terminos': VERSION_TERMINOS}
+        datos = {'username': 'csrf49', 'password': 'SolBosque!7285', 'acepta_terminos': True, 'version_terminos': VERSION_TERMINOS}
         self.assertEqual(self.post('/api/auth/registro/', datos, cliente).status_code, 403)
         token = cliente.get('/api/csrf/').json()['csrfToken']
         self.assertEqual(cliente.post('/api/auth/registro/', json.dumps(datos), content_type='application/json', HTTP_X_CSRFTOKEN=token).status_code, 201)

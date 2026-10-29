@@ -1,6 +1,7 @@
 export interface Alumno {
   id: number
   nombre: string
+  username: string
   email: string
   ultima_actividad: string | null
   en_linea: boolean

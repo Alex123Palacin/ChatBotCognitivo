@@ -51,7 +51,7 @@ function BarraLateralComp({ abierto, cerrar }: BarraLateralProps) {
       </div>
       <div className="mt-auto border-t border-slate-200 pt-4">
         <p className="truncate px-3 text-xs font-semibold text-slate-700">{usuario?.nombre || 'Estudiante'}</p>
-        <p className="mt-1 truncate px-3 text-[11px] text-slate-500" title={usuario?.email}>{usuario?.email}</p>
+        <p className="mt-1 truncate px-3 text-[11px] text-slate-500" title={usuario?.username}>{usuario?.username}</p>
         <button type="button" onClick={() => { void salir() }} disabled={saliendo} className="mt-3 flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] text-slate-500 transition hover:bg-white hover:text-slate-800 focus-visible:outline-2 focus-visible:outline-blue-600 disabled:opacity-40">
           <LogOut size={17} /> {saliendo ? 'Cerrando sesión…' : 'Cerrar sesión'}
         </button>

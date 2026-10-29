@@ -19,7 +19,7 @@ function InformacionAlumnoComp({ alumno }: { alumno: Alumno }) {
   return (
     <section aria-label="Información del estudiante" className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-medium [overflow-wrap:anywhere]">{alumno.email}</p>
+        <p className="text-sm font-medium [overflow-wrap:anywhere]">Usuario: {alumno.username}</p>
         <span className={`rounded-full px-3 py-1 text-xs ${alumno.en_linea ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{alumno.en_linea ? 'Activo recientemente' : 'Sin actividad reciente'}</span>
       </div>
       <dl className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

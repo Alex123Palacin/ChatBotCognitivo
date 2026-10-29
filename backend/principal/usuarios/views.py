@@ -1,8 +1,9 @@
+import re
+
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
@@ -60,26 +61,25 @@ def registro(request):
         return error('Debes aceptar los términos y la eliminación automática de los mensajes a los 30 días para crear tu cuenta.')
     if datos.get('version_terminos') != VERSION_TERMINOS:
         return error('Los términos han cambiado. Actualiza la página y vuelve a leerlos antes de aceptar.')
-    email = str(datos.get('email', '')).strip().lower()
+    identificador = datos.get('username', '')
     password = datos.get('password', '')
     nombre = str(datos.get('nombre', '')).strip()
-    try:
-        validate_email(email)
-    except ValidationError:
-        return error('Escribe una dirección de Gmail válida.')
-    if not email.endswith('@gmail.com') or len(email) > 150:
-        return error('Crea tu cuenta con una dirección @gmail.com.')
+    if not isinstance(identificador, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9._-]{2,39}', identificador.strip()):
+        return error('El usuario debe tener entre 3 y 40 caracteres, empezar con una letra y usar solo letras sin tildes, números, punto, guion o guion bajo.')
+    username = identificador.strip().lower()
     if not isinstance(password, str) or not password or len(password) > 128:
         return error('La contraseña debe tener entre 8 y 128 caracteres.')
     if len(nombre) > 150:
         return error('El nombre puede tener hasta 150 caracteres.')
-    usuario = User(username=email, email=email, first_name=nombre)
+    usuario = User(username=username, email='', first_name=nombre, is_staff=False, is_superuser=False)
     try:
         validate_password(password, user=usuario)
     except ValidationError as exc:
         return error(' '.join(exc.messages))
     try:
         with transaction.atomic():
+            if User.objects.filter(username__iexact=username).exists():
+                return error('Ya existe una cuenta con ese usuario. Elige otro o inicia sesión.', 409)
             usuario.set_password(password)
             usuario.save()
             ahora = timezone.now()
@@ -88,7 +88,7 @@ def registro(request):
                 terminos_version=VERSION_TERMINOS, terminos_aceptados_en=ahora,
             )
     except IntegrityError:
-        return error('Ya existe una cuenta con ese Gmail. Inicia sesión.', 409)
+        return error('Ya existe una cuenta con ese usuario. Elige otro o inicia sesión.', 409)
     login(request, usuario)
     return JsonResponse({'usuario': usuario_json(usuario)}, status=201)
 
@@ -96,7 +96,7 @@ def registro(request):
 @acceso(['POST'], publico=True)
 def iniciar_sesion(request):
     datos = datos_json(request)
-    # El estudiante entra con su Gmail y el administrador local con "admin".
+    # Se mantiene el contrato anterior para cuentas cuyos identificadores eran correos.
     identificador = datos.get('username', datos.get('email', ''))
     password = datos.get('password', '')
     if not isinstance(identificador, str) or not isinstance(password, str):
@@ -109,7 +109,10 @@ def iniciar_sesion(request):
     intentos = cache.get(clave, 0)
     if intentos >= 10:
         return error('Hubo demasiados intentos. Espera 15 minutos y vuelve a intentar.', 429)
-    usuario = authenticate(request, username=identificador, password=password)
+    coincidencias = list(User.objects.filter(username__iexact=identificador).values_list('username', flat=True)[:2])
+    # No elegimos una identidad si existen nombres heredados que solo difieren en mayúsculas.
+    nombre_autenticacion = coincidencias[0] if len(coincidencias) == 1 else identificador
+    usuario = authenticate(request, username=nombre_autenticacion, password=password) if len(coincidencias) < 2 else None
     if usuario is None:
         cache.set(clave, intentos + 1, 900)
         return error('Usuario o contraseña incorrectos.', 401)

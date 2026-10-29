@@ -14,7 +14,7 @@ function ReporteAlumnoPage() {
       <EstadoCargaComp cargando={cargando} error={error} reintentar={refrescar} />
       {datos && <>
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h2 className="text-lg font-semibold [overflow-wrap:anywhere]">{datos.alumno.nombre}</h2><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere]">{datos.alumno.email}</p></div><span className={`rounded-full px-3 py-1.5 text-xs font-medium ${datos.estado === 'listo' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{datos.estado === 'listo' ? 'Reporte disponible' : 'Reporte en proceso'}</span></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><h2 className="text-lg font-semibold [overflow-wrap:anywhere]">{datos.alumno.nombre}</h2><p className="mt-1 text-sm text-slate-500 [overflow-wrap:anywhere]">{datos.alumno.username}</p></div><span className={`rounded-full px-3 py-1.5 text-xs font-medium ${datos.estado === 'listo' ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'}`}>{datos.estado === 'listo' ? 'Reporte disponible' : 'Reporte en proceso'}</span></div>
           <p className="mt-4 text-xs leading-relaxed text-slate-500">{formatearPeriodo(datos.inicio, datos.fin)} · Hora de Lima</p>
           <p className="mt-2 text-xs text-slate-500">{datos.mensajes_estudiante} mensajes del estudiante · {datos.total_evidencias} fragmentos de evidencia</p>
           <h3 className="mt-6 text-sm font-semibold">Resumen de la conversación</h3>

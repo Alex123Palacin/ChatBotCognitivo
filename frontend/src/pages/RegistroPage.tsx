@@ -11,7 +11,7 @@ function RegistroPage() {
   const { registrar } = useAuth()
   const navigate = useNavigate()
   const [nombre, setNombre] = useState('')
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmacion, setConfirmacion] = useState('')
   const [acepta, setAcepta] = useState(false)
@@ -42,12 +42,12 @@ function RegistroPage() {
     event.preventDefault()
     if (enviando) return
     if (password !== confirmacion) { setError('Las contraseñas no coinciden.'); return }
-    if (!email.trim().toLowerCase().endsWith('@gmail.com')) { setError('Utiliza tu dirección de Gmail para crear la cuenta.'); return }
+    if (!/^[A-Za-z][A-Za-z0-9._-]{2,39}$/.test(username.trim())) { setError('El usuario debe tener entre 3 y 40 caracteres, empezar con una letra y usar solo letras sin tildes, números, punto, guion o guion bajo.'); return }
     if (!terminos || !acepta) { setError('Lee y acepta los términos de conservación de 30 días antes de continuar.'); return }
     setEnviando(true)
     setError('')
     try {
-      await registrar(nombre, email, password, { acepta_terminos: acepta, version_terminos: terminos.version })
+      await registrar(nombre, username.trim().toLowerCase(), password, { acepta_terminos: acepta, version_terminos: terminos.version })
       navigate('/chat', { replace: true })
     } catch (fallo) {
       setError(fallo instanceof Error ? fallo.message : 'No se pudo crear la cuenta.')
@@ -60,10 +60,13 @@ function RegistroPage() {
     <MarcoAuthComp titulo="Crea tu cuenta" descripcion="Tendrás un chat personal para conversar a tu ritmo.">
       <form onSubmit={enviar} className="space-y-5">
         <InputUI id="nombre" etiqueta="¿Cómo te llamas?" autoComplete="given-name" required maxLength={80} value={nombre} onChange={(event) => setNombre(event.target.value)} disabled={enviando} />
-        <InputUI id="email" etiqueta="Tu dirección de Gmail" type="email" autoComplete="username" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} disabled={enviando} placeholder="tuusuario@gmail.com" />
+        <div>
+          <InputUI id="username" etiqueta="Elige tu usuario" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required minLength={3} maxLength={40} pattern="[a-zA-Z][a-zA-Z0-9._\-]{2,39}" value={username} onChange={(event) => setUsername(event.target.value)} disabled={enviando} placeholder="estudiante49" aria-describedby="ayuda-usuario" />
+          <p id="ayuda-usuario" className="mt-2 text-xs leading-relaxed text-slate-500">Entre 3 y 40 caracteres. Empieza con una letra; puedes usar letras sin tildes, números, punto, guion y guion bajo. Se guardará en minúsculas.</p>
+        </div>
         <div>
           <InputUI id="password" etiqueta="Elige una contraseña para esta cuenta" type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={enviando} />
-          <p className="mt-2 text-xs leading-relaxed text-slate-500">Usa al menos 8 caracteres. Esta contraseña pertenece a Chatbot Cognitivo; no escribas la de tu Gmail.</p>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">Usa al menos 8 caracteres y una contraseña propia para Chatbot Cognitivo, difícil de adivinar.</p>
         </div>
         <InputUI id="confirmacion" etiqueta="Repite tu contraseña" type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={confirmacion} onChange={(event) => setConfirmacion(event.target.value)} disabled={enviando} />
         <div className="rounded-xl bg-blue-50/70 p-4 text-xs leading-relaxed text-slate-600">

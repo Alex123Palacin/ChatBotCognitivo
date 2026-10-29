@@ -13,7 +13,7 @@ function AdminPage() {
   const filtro = busqueda.trim().toLowerCase()
   const activos = alumnos.filter((alumno) => alumno.en_linea).length
   const visibles = alumnos.filter((alumno) => (!soloActivos || alumno.en_linea)
-    && `${alumno.nombre} ${alumno.email}`.toLowerCase().includes(filtro))
+    && `${alumno.nombre} ${alumno.username}`.toLowerCase().includes(filtro))
   const tarjetas = [
     { titulo: 'Todos los estudiantes', cantidad: alumnos.length, descripcion: 'Cuentas de estudiantes registradas', activos: false },
     { titulo: 'Activos recientemente', cantidad: activos, descripcion: 'Actividad registrada en los últimos 5 minutos', activos: true },
@@ -39,7 +39,7 @@ function AdminPage() {
           ))}
         </div>
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div className="w-full max-w-sm"><InputUI id="busqueda" etiqueta="Buscar estudiante" type="search" value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Nombre o Gmail" /></div>
+          <div className="w-full max-w-sm"><InputUI id="busqueda" etiqueta="Buscar estudiante" type="search" value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Usuario o nombre" /></div>
           <p className="text-sm text-slate-500">{visibles.length} estudiantes visibles · {soloActivos ? 'Solo actividad reciente' : 'Todos los estudiantes'}</p>
         </div>
         <TablaAlumnosComp alumnos={visibles} hayRegistrados={alumnos.length > 0} />

@@ -20,7 +20,7 @@ export async function obtenerUsuario(): Promise<{ usuario: Usuario | null }> {
 }
 
 export async function iniciarSesionApi(identificador: string, password: string): Promise<RespuestaAuth> {
-  const credenciales = identificador.includes('@') ? { email: identificador, password } : { username: identificador, password }
+  const credenciales = { username: identificador.trim().toLowerCase(), password }
   const datos = await peticionApi<{ usuario: unknown }>('/api/auth/login/', { method: 'POST', body: credenciales })
   return { usuario: validarUsuario(datos.usuario) }
 }
@@ -35,11 +35,14 @@ export async function obtenerTerminosRegistro(): Promise<TerminosRegistro> {
   return datos
 }
 
-export async function registrarApi(nombre: string, email: string, password: string, aceptacion: AceptacionTerminos): Promise<RespuestaAuth> {
+export async function registrarApi(nombre: string, username: string, password: string, aceptacion: AceptacionTerminos): Promise<RespuestaAuth> {
   if (aceptacion?.acepta_terminos !== true || !aceptacion.version_terminos?.trim()) {
     throw new Error('Lee y acepta los términos de conservación antes de crear tu cuenta.')
   }
-  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/registro/', { method: 'POST', body: { nombre, email, password, acepta_terminos: aceptacion.acepta_terminos, version_terminos: aceptacion.version_terminos } })
+  if (!/^[A-Za-z][A-Za-z0-9._-]{2,39}$/.test(username.trim())) {
+    throw new Error('El usuario debe tener entre 3 y 40 caracteres y empezar con una letra; usa letras sin tildes, números, punto, guion o guion bajo.')
+  }
+  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/registro/', { method: 'POST', body: { nombre, username: username.trim().toLowerCase(), password, acepta_terminos: aceptacion.acepta_terminos, version_terminos: aceptacion.version_terminos } })
   return { usuario: validarUsuario(datos.usuario) }
 }
 

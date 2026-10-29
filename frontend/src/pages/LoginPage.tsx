@@ -8,7 +8,7 @@ import InputUI from '../ui/InputUI'
 function LoginPage() {
   const { iniciarSesion, error: errorConexion, refrescarUsuario } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState('')
@@ -19,7 +19,7 @@ function LoginPage() {
     setEnviando(true)
     setError('')
     try {
-      const usuario = await iniciarSesion(email, password)
+      const usuario = await iniciarSesion(username, password)
       navigate(usuario.es_admin ? '/administrador' : '/chat', { replace: true })
     } catch (fallo) {
       setError(fallo instanceof Error ? fallo.message : 'No se pudo iniciar sesión.')
@@ -32,7 +32,7 @@ function LoginPage() {
     <MarcoAuthComp titulo="Bienvenido de nuevo" descripcion="Inicia sesión para continuar tu conversación y tu acompañamiento.">
       {errorConexion && <div role="alert" className="mb-5 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">{errorConexion}<button type="button" className="mt-2 block font-semibold underline underline-offset-2" onClick={() => { void refrescarUsuario() }}>Comprobar conexión</button></div>}
       <form onSubmit={enviar} className="space-y-5">
-        <InputUI id="email" etiqueta="Correo electrónico" type="email" autoComplete="username" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} disabled={enviando} placeholder="tuusuario@gmail.com" />
+        <InputUI id="username" etiqueta="Usuario" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required maxLength={150} value={username} onChange={(event) => setUsername(event.target.value)} disabled={enviando} placeholder="estudiante49" />
         <InputUI id="password" etiqueta="Contraseña de tu cuenta" type="password" autoComplete="current-password" required maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} disabled={enviando} />
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         <BotonUI type="submit" className="w-full" disabled={enviando}>{enviando ? 'Iniciando sesión…' : 'Iniciar sesión'}</BotonUI>

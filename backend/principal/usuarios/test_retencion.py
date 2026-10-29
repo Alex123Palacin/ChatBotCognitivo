@@ -17,7 +17,7 @@ from usuarios.retencion import DIAS_RETENCION, VERSION_TERMINOS, limpiar_convers
 
 class TerminosRegistroTests(TestCase):
     def registrar(self, **extra):
-        datos = {'email': 'nueva@gmail.com', 'nombre': 'Ana', 'password': 'BosqueLluvia!8724', **extra}
+        datos = {'username': 'nueva49', 'nombre': 'Ana', 'password': 'BosqueLluvia!8724', **extra}
         return self.client.post('/api/auth/registro/', json.dumps(datos), content_type='application/json')
 
     def test_requiere_aceptacion_booleana_y_version_presentada_vigente(self):

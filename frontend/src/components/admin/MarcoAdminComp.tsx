@@ -30,7 +30,7 @@ function MarcoAdminComp({ titulo, descripcion, children }: { titulo: string; des
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
           <Link to="/administrador" className="text-base font-semibold text-slate-900 sm:text-lg">Chatbot Cognitivo <span className="ml-2 inline-block text-xs font-normal text-slate-500">Administración</span></Link>
           <div className="flex items-center gap-3">
-            <span className="max-w-52 truncate text-sm text-slate-500">{usuario?.nombre || usuario?.username || usuario?.email}</span>
+            <span className="max-w-52 truncate text-sm text-slate-500">{usuario?.nombre || usuario?.username}</span>
             <IconButtonUI etiqueta="Cerrar sesión" disabled={saliendo} onClick={() => { void salir() }}><LogOut size={19} /></IconButtonUI>
           </div>
         </div>

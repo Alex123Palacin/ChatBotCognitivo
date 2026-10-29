@@ -7,7 +7,7 @@ export interface EstadoAuth {
   error: string
   refrescarUsuario: () => Promise<void>
   iniciarSesion: (identificador: string, password: string) => Promise<Usuario>
-  registrar: (nombre: string, email: string, password: string, aceptacion: AceptacionTerminos) => Promise<Usuario>
+  registrar: (nombre: string, username: string, password: string, aceptacion: AceptacionTerminos) => Promise<Usuario>
   cerrarSesion: () => Promise<void>
 }
 

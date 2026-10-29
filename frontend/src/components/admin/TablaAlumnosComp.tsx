@@ -22,7 +22,7 @@ function TablaAlumnosComp({ alumnos, hayRegistrados }: { alumnos: Alumno[]; hayR
             <tr key={alumno.id} className="cursor-pointer transition hover:bg-blue-50/40" onClick={(event) => {
               if (!(event.target as HTMLElement).closest('a')) navigate(`/administrador/alumnos/${alumno.id}`)
             }}>
-              <td className="px-5 py-5"><p className="font-medium text-slate-900">{alumno.nombre || 'Estudiante'}</p><p className="mt-1 text-xs text-slate-500">{alumno.email}</p></td>
+              <td className="px-5 py-5"><p className="font-medium text-slate-900">{alumno.nombre || 'Estudiante'}</p><p className="mt-1 text-xs text-slate-500">{alumno.username}</p></td>
               <td className="px-5 py-5">
                 <span className={`whitespace-nowrap text-xs ${alumno.en_linea ? 'text-emerald-700' : 'text-slate-500'}`}>{alumno.en_linea ? 'Activo recientemente' : 'Sin actividad reciente'}</span>
                 <p className="mt-1 whitespace-nowrap text-xs text-slate-400">{formatearFecha(alumno.ultima_actividad, true)}</p>

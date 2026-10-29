@@ -75,9 +75,9 @@ function AuthProviderComp({ children }: { children: ReactNode }) {
     return datos.usuario
   }
 
-  async function registrar(nombre: string, email: string, password: string, aceptacion: AceptacionTerminos): Promise<Usuario> {
+  async function registrar(nombre: string, username: string, password: string, aceptacion: AceptacionTerminos): Promise<Usuario> {
     const version = ++versionSesion.current
-    const datos = await registrarApi(nombre.trim(), email.trim().toLowerCase(), password, aceptacion)
+    const datos = await registrarApi(nombre.trim(), username.trim().toLowerCase(), password, aceptacion)
     if (version === versionSesion.current) {
       setUsuario(datos.usuario)
       setCargando(false)
