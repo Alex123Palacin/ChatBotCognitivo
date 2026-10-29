@@ -85,6 +85,15 @@ export interface PerfilIndicadores {
     recurso: boolean
     ausencia_explicita: boolean
     con_evidencia: boolean
+    estado: 'dificultad_reportada' | 'recurso_reportado' | 'ausencia_explicita' | 'relato_mixto' | 'no_mencionado' | 'analisis_pendiente' | 'sin_mensajes'
+    etiqueta: string
+    analisis: string
+    evidencias: {
+      cita: string
+      observacion: string
+      fecha: string
+    }[]
+    total_evidencias: number
   }[]
   resumen: string
   mensajes_analizados: number

@@ -61,11 +61,14 @@ class EstudioTests(TestCase):
         w = load_workbook(BytesIO(respuesta.content))
         self.assertEqual((w['Resultados'].max_row, w['Resultados'].max_column), (111, 9))
         self.assertEqual({row[0] for row in list(w['Resultados'].values)[1:]}, {f'Estudiante {i}' for i in ids})
+        for row in list(w['Resultados'].values)[1:]:
+            self.assertTrue(all(isinstance(c, str) and c.strip() for c in row))
+            self.assertTrue(all('No mencionado en la conversación' in c for c in row[2:]))
         fuera = get_user_model().objects.filter(is_staff=False).exclude(pk__in=ids).first()
         self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': fuera.pk}).status_code, 400)
         self.assertTrue(Mensaje.objects.filter(usuario=fuera).exists())
 
-    def test_grafico_y_excel_comparten_frecuencia_y_no_usar_recuentos_como_gravedad(self):
+    def test_perfil_y_excel_comparten_analisis_sin_usar_recuentos_como_gravedad(self):
         self.seleccionar()
         u = muestra_actual().usuarios.first()
         m = u.mensajes_chat.get()
@@ -81,7 +84,10 @@ class EstudioTests(TestCase):
         self.assertTrue(all(x['frecuencia'] is None for x in p['indicadores'] if x['id'] != 'planificacion'))
         w = load_workbook(BytesIO(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': u.pk}).content))
         filas = list(w['Resultados'].values)
-        self.assertEqual(filas[1][filas[0].index('Actividad · Planificación')], 4)
+        valor = filas[1][filas[0].index('Análisis · Planificación')]
+        self.assertIn(i['etiqueta'], valor)
+        self.assertIn(i['analisis'], valor)
+        self.assertIn(m.contenido, valor)
 
     def test_poblacion_distinta_y_muestra_incompleta_no_se_fuerzan(self):
         u = get_user_model().objects.filter(is_staff=False).first(); u.delete()

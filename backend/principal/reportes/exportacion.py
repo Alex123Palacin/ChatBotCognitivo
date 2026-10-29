@@ -1,4 +1,4 @@
-"""Exportación de frecuencias declaradas; no calcula intensidad ni un puntaje total."""
+"""Exportación del análisis cualitativo sustentado en citas de la conversación."""
 from datetime import datetime
 from io import BytesIO
 from math import ceil
@@ -10,8 +10,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from ml.analisis import INDICADORES
-from .indicadores import datos_indicadores
+from ml.analisis import INDICADORES, DIMENSIONES
+from .indicadores import datos_indicadores, perfil_desde_datos
 from .estudio import muestra_actual
 
 LIMA = ZoneInfo('America/Lima')
@@ -55,6 +55,17 @@ def agregar(hoja, valores):
     hoja.row_dimensions[hoja.max_row].height = min(409, max(30, lineas * 15 + 10))
 
 
+def abreviar(texto, limite):
+    return texto if len(texto) <= limite else texto[:limite].rstrip() + '…'
+
+
+def celda_cualitativa(indicador):
+    texto = indicador['etiqueta'] + '. ' + abreviar(indicador['analisis'], 900)
+    if indicador['evidencias']:
+        texto += '\nCita de respaldo: «' + abreviar(indicador['evidencias'][0]['cita'], 200) + '»'
+    return texto
+
+
 def crear_excel(usuarios, ahora=None):
     ahora = ahora or timezone.now()
     usuarios = sorted(usuarios, key=lambda usuario: usuario.pk)
@@ -67,25 +78,35 @@ def crear_excel(usuarios, ahora=None):
     libro = Workbook()
     libro.remove(libro.active)
     libro.properties.creator = 'Chatbot Cognitivo'
-    libro.properties.title = 'Frecuencias declaradas por indicador'
+    libro.properties.title = 'Análisis cualitativo de la conversación por indicador'
     columnas = [('ID estudiante', 20), ('Usuario', 25)]
-    columnas.extend((f'Actividad · {meta["nombre"]}', 25) for meta in INDICADORES.values())
+    columnas.extend((f'Análisis · {meta["nombre"]}', 60) for meta in INDICADORES.values())
     resultados = crear_hoja(libro, 'Resultados', columnas)
     resultados.freeze_panes = 'C2'
     resultados.row_dimensions[1].height = 60
+    evidencias = crear_hoja(libro, 'Evidencias', [
+        ('ID estudiante', 20), ('Usuario', 25), ('Dimensión', 28), ('Indicador', 28),
+        ('Estado cualitativo', 30), ('Cita literal del estudiante', 75),
+        ('Observación registrada', 75), ('Fecha · Lima', 22),
+    ])
+    evidencias.freeze_panes = 'C2'
     ficha = crear_hoja(libro, 'Ficha', [('Campo', 31), ('Descripción', 115)])
     ficha.freeze_panes = 'A2'
     for fila in [
-        ('Documento', 'Frecuencias declaradas por indicador · versión 3'),
+        ('Documento', 'Análisis cualitativo de la conversación por indicador · versión 4'),
         ('Exportado', hora_lima(ahora)),
         ('Periodo', periodo),
-        ('Escala', '1 = Nunca; 2 = Rara vez; 3 = Algunas veces; 4 = Casi siempre; 5 = Siempre.'),
-        ('Fuente', 'Frecuencias explícitas del estudiante vinculadas a un indicador y a un contexto temporal inequívoco. También se admite una respuesta tras una pregunta inequívoca del chatbot, en la misma sesión y dentro de dos horas. Se conservan las expresiones del estudiante; no se adivinan frecuencias.'),
-        ('Dificultades', 'Sobrecarga, presión del tiempo y síntomas: mayor valor significa una dificultad relatada con mayor frecuencia.'),
-        ('Afrontamiento', 'Planificación, automotivación y búsqueda de soporte: mayor valor significa mayor frecuencia de uso del recurso, no más estrés.'),
-        ('Sin información', 'No hay una frecuencia inequívoca, hay relatos contradictorios, faltan mensajes o quedan análisis pendientes. No equivale a Nunca ni a cero estrés.'),
-        ('Alcance', 'Registro descriptivo de frecuencia, sin suma global ni clasificación de estrés bajo, medio o alto. No es una escala validada de intensidad, un diagnóstico ni una prueba de eficacia.'),
-        ('Identificadores', 'ID interno y nombre de usuario. No se incluyen nombres personales, correos, contraseñas ni conversaciones.'),
+        ('Fuente', 'Mensajes del estudiante analizados y citas copiadas literalmente de esos mensajes, dentro del periodo y de su propia conversación. Las observaciones ya registradas describen esas citas; la descarga no solicita nuevas inferencias al modelo.'),
+        ('Dificultad reportada', 'El estudiante expresa una dificultad relacionada con el indicador. Es una descripción del relato, no una frecuencia ni un nivel clínico.'),
+        ('Recurso utilizado', 'El estudiante relata una práctica de planificación, automotivación o búsqueda de soporte que utiliza.'),
+        ('Ausencia expresada', 'El estudiante niega expresamente una dificultad. En afrontamiento, significa que declara no usar o no disponer del recurso. Se limita al contexto relatado.'),
+        ('Relato mixto', 'Existen distintas señales del mismo indicador. Se conservan las dificultades, recursos o ausencias expresadas sin descartar los relatos diferentes.'),
+        ('No mencionado', 'El indicador no aparece en los mensajes analizados. No permite afirmar que el estudiante no presente ese problema.'),
+        ('Análisis pendiente', 'Hay mensajes aún sin analizar y el indicador todavía no tiene citas validadas. Una descripción con evidencia disponible también puede ser provisional.'),
+        ('Sin conversación registrada', 'No hay mensajes del estudiante dentro del periodo consultado. Cada indicador conserva una descripción explícita.'),
+        ('Lectura del archivo', 'Resultados: una fila por estudiante, con ID, usuario y siete análisis cualitativos. Evidencias: citas completas, observaciones y fechas que respaldan esos análisis. Las citas abreviadas en Resultados se conservan completas en Evidencias.'),
+        ('Alcance', 'Análisis cualitativo descriptivo, sin escala numérica, suma global ni clasificación de estrés bajo, medio o alto. No constituye un diagnóstico, una puntuación SISCO o una prueba de eficacia.'),
+        ('Identificadores', 'ID interno y nombre de usuario. No se incluyen nombres personales, correos ni contraseñas. La hoja Evidencias contiene fragmentos de conversación y requiere acceso autorizado.'),
     ]:
         agregar(ficha, fila)
     if muestra:
@@ -97,9 +118,18 @@ def crear_excel(usuarios, ahora=None):
         perfil = getattr(usuario, 'perfil', None)
         if perfil and perfil.origen_datos == 'demostracion':
             demos.append(codigo)
+        perfil_cualitativo = perfil_desde_datos(datos[usuario.pk])
+        por_codigo = {i['id']: i for i in perfil_cualitativo['indicadores']}
         fila = [codigo, usuario.username]
-        fila.extend(datos[usuario.pk]['frecuencias'][indicador] for indicador in INDICADORES)
+        fila.extend(celda_cualitativa(por_codigo[indicador]) for indicador in INDICADORES)
         agregar(resultados, fila)
+        for evidencia in datos[usuario.pk]['evidencias']:
+            meta = INDICADORES[evidencia.indicador]
+            etiqueta = {'dificultad': 'Dificultad reportada', 'recurso': 'Recurso utilizado',
+                        'ausencia_explicita': 'Ausencia expresada del recurso' if meta['dimension'] == 'afrontamiento' else 'Ausencia expresada'}[evidencia.senal]
+            agregar(evidencias, [codigo, usuario.username, DIMENSIONES[meta['dimension']], meta['nombre'],
+                                etiqueta, evidencia.cita, evidencia.observacion.strip() or 'Cita literal del estudiante.',
+                                hora_lima(evidencia.mensaje.fecha)])
     if demos:
         agregar(ficha, ('Tipo de datos', 'Demostración: ' + ', '.join(demos) + '. Sus relatos fueron generados para comprobar el sistema; no son observaciones de participantes de investigación.'))
     for hoja in libro:
