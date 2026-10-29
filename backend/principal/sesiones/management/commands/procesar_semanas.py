@@ -8,7 +8,7 @@ from usuarios.retencion import limpiar_conversaciones
 
 
 class Command(BaseCommand):
-    help = 'Analiza mensajes pendientes, actualiza reportes y aplica la conservación aceptada de 30 días.'
+    help = 'Analiza mensajes pendientes, actualiza reportes y aplica los plazos de conservación aceptados.'
 
     def add_arguments(self, parser):
         parser.add_argument('--continuo', action='store_true', help='Mantiene activo el procesamiento automático.')

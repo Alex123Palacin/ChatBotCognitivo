@@ -35,14 +35,14 @@ class Mensaje(models.Model):
         if not self._state.adding or self.eliminar_despues_de is not None or not self.usuario_id or not self.fecha:
             return
         from usuarios.models import Perfil
-        from usuarios.retencion import VERSION_TERMINOS, fecha_eliminacion
+        from usuarios.retencion import fecha_eliminacion
 
         perfil = Perfil.objects.filter(usuario_id=self.usuario_id).first()
         if perfil is not None:
             fecha = self._meta.get_field('fecha').to_python(self.fecha)
             self.eliminar_despues_de = fecha_eliminacion(fecha, perfil)
             if self.eliminar_despues_de is not None:
-                self.retencion_version = VERSION_TERMINOS
+                self.retencion_version = perfil.terminos_version
 
     def save(self, *args, **kwargs):
         self.preparar_retencion()

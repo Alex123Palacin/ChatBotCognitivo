@@ -5,6 +5,7 @@ import InformacionAlumnoComp from '../../components/admin/InformacionAlumnoComp'
 import ReporteActualComp from '../../components/admin/ReporteActualComp'
 import TarjetaReporteComp from '../../components/admin/TarjetaReporteComp'
 import DescargarEvaluacionComp from '../../components/admin/DescargarEvaluacionComp'
+import PerfilIndicadoresComp from '../../components/admin/PerfilIndicadoresComp'
 import { useAlumno } from '../../hooks/useAlumno'
 
 function AlumnoPage() {
@@ -27,6 +28,7 @@ function AlumnoPage() {
           <h2 className="mb-4 text-lg font-semibold">Historial de reportes</h2>
           {datos.reportes.length === 0 ? <p className="rounded-2xl border border-slate-200 bg-white p-6 text-sm leading-relaxed text-slate-500">Todavía no hay reportes guardados. Puedes consultar el análisis actual de la conversación desde aquí.</p> : <div className="grid gap-4 md:grid-cols-2">{datos.reportes.map((reporte) => <TarjetaReporteComp key={reporte.id} reporte={reporte} />)}</div>}
         </section>
+        <PerfilIndicadoresComp perfil={datos.perfil_indicadores} />
       </div>}
     </MarcoAdminComp>
   )

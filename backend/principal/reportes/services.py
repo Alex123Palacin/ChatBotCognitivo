@@ -13,6 +13,7 @@ from sesiones.models import SesionSemanal
 from sesiones.services import actualizar_semanas
 from usuarios.models import Perfil
 from .models import Evidencia, ReporteSemanal
+from .estudio import acotar_mensajes
 
 SENALES = {'dificultad', 'recurso', 'ausencia_explicita'}
 logger = logging.getLogger(__name__)
@@ -131,7 +132,7 @@ def resumen_json(reporte):
 
 
 def evidencias_sesion(sesion):
-    candidatas = Evidencia.objects.filter(mensaje__sesion=sesion, mensaje__remitente='usuario', mensaje__analisis_estado='listo').select_related('mensaje').order_by('mensaje__fecha', 'pk')
+    candidatas = Evidencia.objects.filter(mensaje__sesion=sesion, mensaje__remitente='usuario', mensaje__analisis_estado='listo', mensaje_id__in=acotar_mensajes(sesion.mensajes.all()).values('pk')).select_related('mensaje').order_by('mensaje__fecha', 'pk')
     return [e for e in candidatas if e.indicador in INDICADORES and e.senal in SENALES and e.cita.strip() and e.cita in e.mensaje.contenido]
 
 
@@ -196,12 +197,14 @@ def reporte_actual_json(sesion, ahora=None):
 def reporte_conversacion_json(usuario, ahora=None):
     """Actividad real disponible: no impone cuatro semanas ni modifica históricos."""
     ahora = ahora or timezone.now()
-    registros = list(Mensaje.objects.filter(usuario=usuario, remitente='usuario', fecha__lte=ahora).values('fecha', 'analisis_estado'))
+    mensajes = acotar_mensajes(Mensaje.objects.filter(usuario=usuario, remitente='usuario', fecha__lte=ahora))
+    registros = list(mensajes.values('fecha', 'analisis_estado'))
     if not registros:
         return None
     candidatas = Evidencia.objects.filter(
         mensaje__usuario=usuario, mensaje__sesion__usuario=usuario,
         mensaje__remitente='usuario', mensaje__analisis_estado='listo', mensaje__fecha__lte=ahora,
+        mensaje_id__in=mensajes.values('pk'),
     ).select_related('mensaje').order_by('mensaje__fecha', 'pk')
     evidencias = [e for e in candidatas if e.indicador in INDICADORES and e.senal in SENALES and e.cita.strip() and e.cita in e.mensaje.contenido]
     cantidad = len(registros)

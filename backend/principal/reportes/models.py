@@ -1,4 +1,16 @@
 from django.db import models
+from django.conf import settings
+
+
+class MuestraEstudio(models.Model):
+    clave = models.SlugField(primary_key=True, max_length=60)
+    inicio = models.DateTimeField()
+    fin = models.DateTimeField()
+    tamano = models.PositiveSmallIntegerField(default=110)
+    poblacion_ids = models.JSONField(default=list)
+    metodo = models.CharField(max_length=80, default='aleatorio_simple_sin_reemplazo')
+    creada = models.DateTimeField(auto_now_add=True)
+    usuarios = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='muestras_estudio')
 
 
 class Evidencia(models.Model):

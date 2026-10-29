@@ -11,7 +11,7 @@ interface BarraLateralProps {
 
 function BarraLateralComp({ abierto, cerrar }: BarraLateralProps) {
   const { usuario, cerrarSesion } = useAuth()
-  const aplicaRetencion = usuario?.terminos_aceptados === true && usuario.retencion_dias === 30
+  const diasRetencion = usuario?.terminos_aceptados ? usuario.retencion_dias : null
   const [error, setError] = useState('')
   const [saliendo, setSaliendo] = useState(false)
   const dialogoRef = useRef<HTMLDialogElement>(null)
@@ -47,7 +47,8 @@ function BarraLateralComp({ abierto, cerrar }: BarraLateralProps) {
       <div className="mt-8">
         <p className="mb-3 px-2 text-[10px] font-semibold tracking-[0.13em] text-slate-500 uppercase">Sobre tu conversación</p>
         <p className="px-2 text-xs leading-5 text-slate-500">Puedes seguir compartiendo lo que necesites, sin etapas ni un orden obligatorio.</p>
-        <p className="mt-3 px-2 text-xs leading-5 text-slate-500">{aplicaRetencion ? 'Tus mensajes nuevos se eliminan automáticamente al cumplir 30 días desde su envío, según los términos que aceptaste.' : 'Tu historial actual se conserva. La política de 30 días se aplica a las cuentas nuevas que la aceptan al registrarse.'}</p>
+        <p className="mt-3 px-2 text-xs leading-5 text-slate-500">{diasRetencion === 90 ? 'Tus mensajes nuevos se eliminan automáticamente a los 90 días desde tu último inicio de sesión, según la política que aceptaste.' : diasRetencion === 30 ? 'Tus mensajes nuevos conservan el plazo de 30 días desde su envío que aceptaste.' : 'Tu historial anterior conserva sus condiciones originales. La política de 90 días se aplica a las cuentas que la aceptan.'}</p>
+        <Link to="/privacidad" className="mt-2 inline-block px-2 py-2 text-xs text-blue-700 underline">Política de Privacidad</Link>
       </div>
       <div className="mt-auto border-t border-slate-200 pt-4">
         <p className="truncate px-3 text-xs font-semibold text-slate-700">{usuario?.nombre || 'Estudiante'}</p>

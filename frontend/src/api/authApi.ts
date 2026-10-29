@@ -28,8 +28,8 @@ export async function iniciarSesionApi(identificador: string, password: string):
 export async function obtenerTerminosRegistro(): Promise<TerminosRegistro> {
   const datos = await peticionApi<TerminosRegistro>('/api/auth/terminos/')
   if (!datos || typeof datos.version !== 'string' || !datos.version.trim()
-    || datos.dias_retencion !== 30 || typeof datos.texto !== 'string' || !datos.texto.trim()
-    || datos.alcance !== 'mensajes_nuevos' || datos.copias_seguridad !== 'gestion_separada') {
+    || datos.dias_retencion !== 90 || typeof datos.texto !== 'string' || !datos.texto.trim()
+    || datos.base_plazo !== 'ultimo_inicio_sesion' || datos.alcance !== 'mensajes_nuevos' || datos.copias_seguridad !== 'gestion_separada') {
     throw new Error('No se pudieron comprobar los términos de conservación. Vuelve a intentarlo.')
   }
   return datos
@@ -42,7 +42,7 @@ export async function registrarApi(nombre: string, username: string, password: s
   if (!/^[A-Za-z][A-Za-z0-9._-]{2,39}$/.test(username.trim())) {
     throw new Error('El usuario debe tener entre 3 y 40 caracteres y empezar con una letra; usa letras sin tildes, números, punto, guion o guion bajo.')
   }
-  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/registro/', { method: 'POST', body: { nombre, username: username.trim().toLowerCase(), password, acepta_terminos: aceptacion.acepta_terminos, version_terminos: aceptacion.version_terminos } })
+  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/registro/', { method: 'POST', body: { ...(nombre ? { nombre } : {}), username: username.trim().toLowerCase(), password, acepta_terminos: aceptacion.acepta_terminos, version_terminos: aceptacion.version_terminos } })
   return { usuario: validarUsuario(datos.usuario) }
 }
 

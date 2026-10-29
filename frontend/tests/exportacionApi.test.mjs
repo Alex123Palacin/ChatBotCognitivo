@@ -19,3 +19,13 @@ test('rechaza selección vacía, html y accesos sin autorización', async () => 
   globalThis.fetch = async () => Response.json({ error: 'Inicia sesión para continuar.' }, { status: 401 })
   await assert.rejects(obtenerEvaluacion([5]), /Inicia sesión/)
 })
+
+test('descarga los 110 seleccionados en una solicitud y rechaza exceder el límite', async () => {
+  const ids = Array.from({ length: 110 }, (_, i) => i + 1)
+  globalThis.fetch = async (url) => {
+    assert.equal(url, `/api/admin/evaluacion.xlsx?alumnos=${ids.join(',')}`)
+    return new Response('archivo', { headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } })
+  }
+  assert.equal(await (await obtenerEvaluacion(ids)).text(), 'archivo')
+  await assert.rejects(obtenerEvaluacion([...ids, 111]), /Selecciona/)
+})

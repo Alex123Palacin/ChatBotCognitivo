@@ -52,8 +52,9 @@ class ExportacionTests(TestCase):
             libro = self.libro()
             modelo.assert_not_called()
         self.assertEqual(libro.sheetnames, ['Resultados', 'Ficha'])
-        self.assertEqual(libro['Resultados'].max_column, 8)
+        self.assertEqual(libro['Resultados'].max_column, 9)
         self.assertEqual(libro['Resultados']['A2'].value, f'Estudiante {self.usuario.pk}')
+        self.assertEqual(libro['Resultados']['B2'].value, self.usuario.username)
         self.assertEqual(self.valor(libro, 'Planificación'), 4)
         contenido = str([list(h.values) for h in libro])
         self.assertNotIn(self.usuario.first_name, contenido)
@@ -84,7 +85,7 @@ class ExportacionTests(TestCase):
         Evidencia.objects.create(mensaje=mensaje, indicador='planificacion', cita=texto,
                                 observacion='Frecuencia explícita del estudiante.', senal='recurso')
         libro = self.libro()
-        self.assertEqual(libro['Resultados'].max_column, 8)
+        self.assertEqual(libro['Resultados'].max_column, 9)
         self.assertEqual(self.valor(libro, 'Planificación'), 4)
 
     def test_pendientes_no_se_califican_y_se_incluye_toda_la_actividad_real(self):
@@ -129,7 +130,7 @@ class ExportacionTests(TestCase):
         self.client.force_login(self.usuario)
         self.assertEqual(self.client.get(self.ruta).status_code, 403)
         self.client.force_login(self.admin)
-        for valor in ('', 'abc', '1,,2', ',1', ','.join(['1'] * 101)):
+        for valor in ('', 'abc', '1,,2', ',1', ','.join(['1'] * 111)):
             self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': valor}).status_code, 400)
         self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': self.admin.pk}).status_code, 404)
         self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': 9999999}).status_code, 404)

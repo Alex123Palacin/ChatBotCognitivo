@@ -68,7 +68,7 @@ class CuentasTests(TestCase):
         self.assertEqual(self.client.get('/api/admin/alumnos/').status_code, 403)
         self.assertEqual(self.client.get('/api/auth/me/').json()['usuario']['username'], 'estudiante49')
         self.assertTrue(u.perfil.terminos_aceptados_en)
-        self.assertEqual(r.json()['usuario']['retencion_dias'], 30)
+        self.assertEqual(r.json()['usuario']['retencion_dias'], 90)
 
     def test_duplicado_de_cuenta_anterior_sin_distinguir_mayusculas(self):
         u = get_user_model().objects.create_user(username='Estudiante49', password='BosqueLluvia!8724')

@@ -4,6 +4,7 @@ import EstadoCargaComp from '../../components/admin/EstadoCargaComp'
 import DimensionReporteComp from '../../components/admin/DimensionReporteComp'
 import { useReportes } from '../../hooks/useReportes'
 import { formatearPeriodo } from '../../utils/fechas'
+import PerfilIndicadoresComp from '../../components/admin/PerfilIndicadoresComp'
 
 function ReporteAlumnoPage() {
   const { id } = useParams()
@@ -22,6 +23,7 @@ function ReporteAlumnoPage() {
           {datos.nota && <p className="mt-5 rounded-xl bg-slate-50 p-4 text-xs leading-relaxed text-slate-500">{datos.nota}</p>}
         </section>
         <div className="space-y-5">{datos.dimensiones.map((dimension) => <DimensionReporteComp key={dimension.id} dimension={dimension} />)}</div>
+        <div className="mt-6"><PerfilIndicadoresComp perfil={datos.perfil_indicadores} /></div>
       </>}
     </MarcoAdminComp>
   )

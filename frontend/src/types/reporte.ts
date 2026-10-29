@@ -38,6 +38,7 @@ export interface Reporte extends ResumenReporte {
   alumno: Alumno
   nota: string
   dimensiones: DimensionReporte[]
+  perfil_indicadores: PerfilIndicadores
 }
 
 export interface CoberturaReporte {
@@ -71,4 +72,21 @@ export interface DetalleAlumno {
   sesiones: SesionAlumno[]
   reportes: ResumenReporte[]
   reporte_actual: ReporteActual | null
+  perfil_indicadores: PerfilIndicadores
+}
+
+export interface PerfilIndicadores {
+  indicadores: {
+    id: string
+    nombre: string
+    dimension: 'estresores' | 'sintomas' | 'afrontamiento'
+    frecuencia: number | null
+    dificultad: boolean
+    recurso: boolean
+    ausencia_explicita: boolean
+    con_evidencia: boolean
+  }[]
+  resumen: string
+  mensajes_analizados: number
+  analisis_pendientes: number
 }

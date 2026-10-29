@@ -5,5 +5,5 @@ import { useDatosAdmin } from './useDatosAdmin'
 export function useAlumnos() {
   const cargar = useCallback((signal: AbortSignal) => obtenerAlumnos(signal), [])
   const estado = useDatosAdmin(cargar)
-  return { ...estado, alumnos: estado.datos?.alumnos ?? [] }
+  return { ...estado, alumnos: estado.datos?.alumnos ?? [], estudio: estado.datos?.estudio ?? null }
 }

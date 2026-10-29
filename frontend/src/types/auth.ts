@@ -5,7 +5,7 @@ export interface Usuario {
   username?: string
   es_admin: boolean
   terminos_aceptados?: boolean
-  retencion_dias?: 30 | null
+  retencion_dias?: 30 | 90 | null
   version_terminos?: string | null
 }
 
@@ -19,6 +19,7 @@ export interface TerminosRegistro {
   texto: string
   alcance: 'mensajes_nuevos'
   copias_seguridad: 'gestion_separada'
+  base_plazo: 'ultimo_inicio_sesion'
 }
 
 export interface AceptacionTerminos {

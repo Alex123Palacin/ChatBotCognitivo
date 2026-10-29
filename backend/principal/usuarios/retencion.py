@@ -6,14 +6,18 @@ from django.db.models import Q
 from django.utils import timezone
 
 
-VERSION_TERMINOS = 'conversaciones-30-dias-v1'
+VERSION_ANTERIOR = 'conversaciones-30-dias-v1'
+VERSION_TERMINOS = 'conversaciones-90-dias-acceso-v2'
 # Conservar versiones anteriores cuando en el futuro se publique otra política.
-VERSIONES_CON_RETENCION = (VERSION_TERMINOS,)
-DIAS_RETENCION = 30
+VERSIONES_CON_RETENCION = (VERSION_ANTERIOR, VERSION_TERMINOS)
+DIAS_RETENCION = 90
 TEXTO_RETENCION = (
-    'Acepto los términos y la política de conservación: los mensajes de mis nuevas '
-    'conversaciones se eliminarán automáticamente del sistema al cumplir 30 días '
-    'desde que se envía cada mensaje. También se retirarán las citas y los resúmenes '
+    'La conversación se almacena bajo tu nombre de usuario y se analiza para generar '
+    'reportes orientativos que pueden consultar administradores autorizados. '
+    'No constituye un diagnóstico. Tus mensajes nuevos se eliminarán automáticamente '
+    'al cumplir 90 días desde tu último inicio de sesión correcto. Cada nuevo inicio '
+    'de sesión reinicia ese plazo para los mensajes sujetos a esta política. '
+    'También se retirarán las citas y los resúmenes '
     'derivados de los mensajes eliminados. Mi cuenta no se elimina por este plazo. '
     'Las copias de seguridad y los archivos que ya se hayan descargado tienen una '
     'gestión de conservación independiente.'
@@ -27,19 +31,33 @@ def politica_json():
         'texto': TEXTO_RETENCION,
         'alcance': 'mensajes_nuevos',
         'copias_seguridad': 'gestion_separada',
+        'base_plazo': 'ultimo_inicio_sesion',
     }
 
 
 def fecha_eliminacion(fecha, perfil):
     """Nunca asigna caducidad a cuentas o mensajes anteriores a la aceptación."""
     aceptacion = perfil.terminos_aceptados_en
-    if perfil.terminos_version != VERSION_TERMINOS or aceptacion is None:
+    if perfil.terminos_version not in VERSIONES_CON_RETENCION or aceptacion is None:
         return None
     if timezone.is_naive(fecha):
         fecha = timezone.make_aware(fecha)
     if fecha < aceptacion:
         return None
-    return fecha + timedelta(days=DIAS_RETENCION)
+    if perfil.terminos_version == VERSION_ANTERIOR:
+        return fecha + timedelta(days=30)
+    acceso = perfil.usuario.last_login or aceptacion
+    return max(acceso, aceptacion) + timedelta(days=DIAS_RETENCION)
+
+
+def renovar_retencion(usuario):
+    """Solo un login correcto renueva v2; me() y los latidos no lo renuevan."""
+    from chat.models import Mensaje
+    perfil = getattr(usuario, 'perfil', None)
+    if perfil and perfil.terminos_version == VERSION_TERMINOS and perfil.terminos_aceptados_en:
+        fecha = max(usuario.last_login or perfil.terminos_aceptados_en, perfil.terminos_aceptados_en)
+        Mensaje.objects.filter(usuario=usuario, retencion_version=VERSION_TERMINOS,
+                               eliminar_despues_de__isnull=False).update(eliminar_despues_de=fecha + timedelta(days=DIAS_RETENCION))
 
 
 def mensajes_vencidos(ahora=None):
@@ -51,6 +69,10 @@ def mensajes_vencidos(ahora=None):
             eliminar_despues_de__lte=ahora,
             retencion_version__in=VERSIONES_CON_RETENCION,
         )
+        .filter(Q(retencion_version=VERSION_ANTERIOR)
+                | Q(retencion_version=VERSION_TERMINOS, usuario__last_login__lte=ahora - timedelta(days=90))
+                | Q(retencion_version=VERSION_TERMINOS, usuario__last_login__isnull=True,
+                    usuario__perfil__terminos_aceptados_en__lte=ahora - timedelta(days=90)))
         .exclude(usuario__perfil__respuesta_hasta__gt=ahora)
         # La relación respuesta_a usa CASCADE. Una respuesta histórica sin plazo
         # no debe borrarse indirectamente al eliminar su mensaje padre.

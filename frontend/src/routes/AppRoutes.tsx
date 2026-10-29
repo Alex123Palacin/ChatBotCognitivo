@@ -7,6 +7,7 @@ import AdminPage from '../pages/admin/AdminPage'
 import AlumnoPage from '../pages/admin/AlumnoPage'
 import ReporteAlumnoPage from '../pages/admin/ReporteAlumnoPage'
 import LoginAdminPage from '../pages/admin/LoginAdminPage'
+import PrivacidadPage from '../pages/PrivacidadPage'
 
 function RutaProtegida({ admin = false }: { admin?: boolean }) {
   const { usuario } = useAuth()
@@ -42,6 +43,7 @@ function AppRoutes() {
   if (cargando) return <div role="status" className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm text-slate-500">Comprobando tu sesión…</div>
   return (
     <Routes key={usuario?.id ?? 'publico'}>
+      <Route path="/privacidad" element={<PrivacidadPage />} />
       <Route element={<RutaPublica />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegistroPage />} />

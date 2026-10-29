@@ -14,4 +14,4 @@ class Perfil(models.Model):
     terminos_aceptados_en = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return self.usuario.email
+        return self.usuario.username

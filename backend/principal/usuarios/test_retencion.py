@@ -12,7 +12,7 @@ from chat.models import Mensaje
 from reportes.models import Evidencia, ReporteSemanal
 from sesiones.models import SesionSemanal
 from usuarios.models import Perfil
-from usuarios.retencion import DIAS_RETENCION, VERSION_TERMINOS, limpiar_conversaciones
+from usuarios.retencion import DIAS_RETENCION, VERSION_ANTERIOR, VERSION_TERMINOS, limpiar_conversaciones
 
 
 class TerminosRegistroTests(TestCase):
@@ -38,7 +38,7 @@ class TerminosRegistroTests(TestCase):
         self.assertLessEqual(perfil.terminos_aceptados_en, timezone.now())
         self.assertTrue(perfil.usuario.check_password('BosqueLluvia!8724'))
         self.assertTrue(respuesta.json()['usuario']['terminos_aceptados'])
-        self.assertEqual(respuesta.json()['usuario']['retencion_dias'], 30)
+        self.assertEqual(respuesta.json()['usuario']['retencion_dias'], 90)
         self.assertEqual(respuesta.json()['usuario']['version_terminos'], VERSION_TERMINOS)
 
     def test_sesion_heredada_no_anuncia_plazo_no_aceptado(self):
@@ -55,8 +55,8 @@ class TerminosRegistroTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         politica = respuesta.json()
         self.assertEqual(politica['version'], VERSION_TERMINOS)
-        self.assertEqual(politica['dias_retencion'], 30)
-        self.assertIn('cada mensaje', politica['texto'])
+        self.assertEqual(politica['dias_retencion'], 90)
+        self.assertIn('último inicio de sesión', politica['texto'])
         self.assertEqual(politica['copias_seguridad'], 'gestion_separada')
         self.assertIn('no-store', respuesta.headers['Cache-Control'])
 
@@ -67,7 +67,7 @@ class RetencionMensajesTests(TestCase):
         self.usuario = get_user_model().objects.create_user(username='nueva@gmail.com', password='BosqueLluvia!8724')
         self.perfil = Perfil.objects.create(
             usuario=self.usuario,
-            terminos_version=VERSION_TERMINOS,
+            terminos_version=VERSION_ANTERIOR,
             terminos_aceptados_en=self.ahora - timedelta(days=40),
         )
         self.sesion = SesionSemanal.objects.create(
@@ -83,8 +83,8 @@ class RetencionMensajesTests(TestCase):
 
     def test_plazo_desde_cada_mensaje_y_no_desde_el_registro(self):
         mensaje = self.mensaje(dias=2)
-        self.assertEqual(mensaje.eliminar_despues_de, mensaje.fecha + timedelta(days=DIAS_RETENCION))
-        self.assertEqual(mensaje.retencion_version, VERSION_TERMINOS)
+        self.assertEqual(mensaje.eliminar_despues_de, mensaje.fecha + timedelta(days=30))
+        self.assertEqual(mensaje.retencion_version, VERSION_ANTERIOR)
         posterior = self.mensaje()
         self.assertGreater(posterior.eliminar_despues_de, mensaje.eliminar_despues_de)
 

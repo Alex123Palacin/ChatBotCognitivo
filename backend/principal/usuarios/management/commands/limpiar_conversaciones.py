@@ -6,7 +6,7 @@ from usuarios.retencion import limpiar_conversaciones
 
 
 class Command(BaseCommand):
-    help = 'Simula o elimina mensajes nuevos cuyo plazo aceptado de 30 días venció; conserva datos heredados.'
+    help = 'Simula o elimina mensajes cuyo plazo aceptado venció; conserva datos heredados.'
 
     def add_arguments(self, parser):
         modo = parser.add_mutually_exclusive_group()

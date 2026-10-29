@@ -12,14 +12,14 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from principal.http import acceso, datos_json, error
 from .models import Perfil
-from .retencion import DIAS_RETENCION, VERSION_TERMINOS, politica_json
+from .retencion import DIAS_RETENCION, VERSION_ANTERIOR, VERSION_TERMINOS, VERSIONES_CON_RETENCION, politica_json, renovar_retencion
 
 User = get_user_model()
 
 
 def usuario_json(usuario):
     perfil = getattr(usuario, 'perfil', None)
-    aceptados = bool(perfil and perfil.terminos_aceptados_en and perfil.terminos_version == VERSION_TERMINOS)
+    aceptados = bool(perfil and perfil.terminos_aceptados_en and perfil.terminos_version in VERSIONES_CON_RETENCION)
     return {
         'id': usuario.pk,
         'username': usuario.username,
@@ -27,7 +27,8 @@ def usuario_json(usuario):
         'nombre': usuario.first_name,
         'es_admin': usuario.is_staff,
         'terminos_aceptados': aceptados,
-        'retencion_dias': DIAS_RETENCION if aceptados else None,
+        'retencion_dias': (30 if perfil.terminos_version == VERSION_ANTERIOR else DIAS_RETENCION) if aceptados else None,
+        'retencion_desde': ('envio_mensaje' if perfil.terminos_version == VERSION_ANTERIOR else 'ultimo_inicio_sesion') if aceptados else None,
         'version_terminos': perfil.terminos_version if aceptados else None,
     }
 
@@ -58,7 +59,7 @@ def me(request):
 def registro(request):
     datos = datos_json(request)
     if datos.get('acepta_terminos') is not True:
-        return error('Debes aceptar los términos y la eliminación automática de los mensajes a los 30 días para crear tu cuenta.')
+        return error('Debes leer y aceptar la Política de Privacidad para crear tu cuenta.')
     if datos.get('version_terminos') != VERSION_TERMINOS:
         return error('Los términos han cambiado. Actualiza la página y vuelve a leerlos antes de aceptar.')
     identificador = datos.get('username', '')
@@ -71,7 +72,7 @@ def registro(request):
         return error('La contraseña debe tener entre 8 y 128 caracteres.')
     if len(nombre) > 150:
         return error('El nombre puede tener hasta 150 caracteres.')
-    usuario = User(username=username, email='', first_name=nombre, is_staff=False, is_superuser=False)
+    usuario = User(username=username, email='', first_name=nombre or username, is_staff=False, is_superuser=False)
     try:
         validate_password(password, user=usuario)
     except ValidationError as exc:
@@ -90,6 +91,7 @@ def registro(request):
     except IntegrityError:
         return error('Ya existe una cuenta con ese usuario. Elige otro o inicia sesión.', 409)
     login(request, usuario)
+    renovar_retencion(usuario)
     return JsonResponse({'usuario': usuario_json(usuario)}, status=201)
 
 
@@ -122,6 +124,7 @@ def iniciar_sesion(request):
     perfil.ultima_actividad = timezone.now()
     perfil.conectado = True
     perfil.save(update_fields=['ultima_actividad', 'conectado'])
+    renovar_retencion(usuario)
     return JsonResponse({'usuario': usuario_json(usuario)})
 
 

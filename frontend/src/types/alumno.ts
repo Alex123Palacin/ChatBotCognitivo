@@ -16,6 +16,17 @@ export interface Alumno {
   analisis_pendientes: number
 }
 
+export interface Estudio {
+  clave: string
+  seleccionados: number
+  tamano: number
+  poblacion: number
+  metodo: string
+  inicio: string
+  fin: string
+  creada: string
+}
+
 export interface SesionAlumno {
   id: number
   numero: number
