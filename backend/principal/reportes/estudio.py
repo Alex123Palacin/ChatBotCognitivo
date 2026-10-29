@@ -10,6 +10,20 @@ def muestra_actual():
     return MuestraEstudio.objects.filter(pk=CLAVE_ESTUDIO).first()
 
 
+def muestra_valida(muestra):
+    """No sustituye integrantes borrados ni admite cuentas ajenas a la selección."""
+    if muestra is None or muestra.tamano != 110:
+        return False
+    poblacion = muestra.poblacion_ids
+    if (not isinstance(poblacion, list) or any(type(pk) is not int for pk in poblacion)
+            or len(poblacion) != 136 or len(set(poblacion)) != 136):
+        return False
+    integrantes = list(muestra.usuarios.values('pk', 'is_staff', 'is_superuser'))
+    return (len(integrantes) == 110 and all(
+        u['pk'] in poblacion and not u['is_staff'] and not u['is_superuser']
+        for u in integrantes))
+
+
 def muestra_json(muestra):
     if muestra is None:
         return None

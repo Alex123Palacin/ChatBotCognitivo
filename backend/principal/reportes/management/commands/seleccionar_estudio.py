@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from reportes.estudio import CLAVE_ESTUDIO, muestra_actual, muestra_json
+from reportes.estudio import CLAVE_ESTUDIO, muestra_actual, muestra_json, muestra_valida
 from reportes.models import MuestraEstudio
 
 
@@ -16,12 +16,14 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--aplicar', action='store_true')
+        parser.add_argument('--si-procede', action='store_true',
+                            help='En el arranque, espera si aún no están las 136 cuentas elegibles.')
 
     def handle(self, *args, **options):
         existente = muestra_actual()
         if existente:
-            if existente.usuarios.count() != 110:
-                raise CommandError('La muestra guardada está incompleta. No se reemplaza ni se vuelve a sortear.')
+            if not muestra_valida(existente):
+                raise CommandError('La muestra guardada está incompleta o contiene cuentas ajenas. No se reemplaza ni se vuelve a sortear.')
             self.stdout.write(json.dumps({'existente': True, **muestra_json(existente)}))
             return
         lima = ZoneInfo('America/Lima')
@@ -31,6 +33,10 @@ class Command(BaseCommand):
             mensajes_chat__fecha__gte=inicio, mensajes_chat__fecha__lt=fin,
         ).order_by('pk').values_list('pk', flat=True).distinct())
         if len(ids) != 136:
+            if options['si_procede']:
+                self.stdout.write(json.dumps({'aplicado': False, 'poblacion': len(ids),
+                                             'a_seleccionar': 110, 'estado': 'pendiente_de_poblacion'}))
+                return
             raise CommandError(f'Se esperaban 136 cuentas elegibles; hay {len(ids)}. No se alteró la selección.')
         if not options['aplicar']:
             self.stdout.write(json.dumps({'aplicado': False, 'poblacion': 136, 'a_seleccionar': 110}))

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.apps import apps
 from django.db import connection
 from openpyxl import load_workbook
@@ -112,3 +112,48 @@ class EstudioTests(TestCase):
         inicializar(apps, SimpleNamespace(connection=connection))
         self.assertEqual(ids, set(muestra_actual().usuarios.values_list('pk', flat=True)))
         self.assertEqual(anteriores, list(Mensaje.objects.values()))
+
+    @override_settings(ESTUDIO_MUESTRA_OBLIGATORIA=True)
+    def test_arranque_reutiliza_los_mismos_110_e_ignora_cuentas_nuevas(self):
+        antes = list(Mensaje.objects.values())
+        call_command('seleccionar_estudio', aplicar=True, si_procede=True, stdout=StringIO())
+        ids = set(muestra_actual().usuarios.values_list('pk', flat=True))
+        get_user_model().objects.create_user('otra_cuenta_fuera_del_estudio')
+        call_command('seleccionar_estudio', aplicar=True, si_procede=True, stdout=StringIO())
+        listado = self.client.get('/api/admin/alumnos/')
+        self.assertEqual(listado.status_code, 200)
+        self.assertEqual(ids, {a['id'] for a in listado.json()['alumnos']})
+        excel = self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': ','.join(map(str, ids))})
+        self.assertEqual(excel.status_code, 200)
+        filas = list(load_workbook(BytesIO(excel.content))['Resultados'].values)[1:]
+        self.assertEqual(len(filas), 110)
+        self.assertEqual({f[0] for f in filas}, {f'Estudiante {pk}' for pk in ids})
+        self.assertEqual(get_user_model().objects.filter(is_staff=False).count(), 137)
+        self.assertEqual(antes, list(Mensaje.objects.values()))
+
+    @override_settings(ESTUDIO_MUESTRA_OBLIGATORIA=True)
+    def test_produccion_sin_muestra_no_lista_ni_exporta_otras_cuentas(self):
+        self.assertEqual(self.client.get('/api/admin/alumnos/').status_code, 503)
+        pk = get_user_model().objects.filter(is_staff=False).first().pk
+        self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': pk}).status_code, 503)
+        self.assertFalse(MuestraEstudio.objects.exists())
+
+    @override_settings(ESTUDIO_MUESTRA_OBLIGATORIA=True)
+    def test_muestra_incompleta_se_detecta_y_no_se_vuelve_a_sortear(self):
+        self.seleccionar()
+        muestra = muestra_actual()
+        muestra.usuarios.remove(muestra.usuarios.first())
+        ids = set(muestra.usuarios.values_list('pk', flat=True))
+        with self.assertRaises(CommandError):
+            call_command('seleccionar_estudio', aplicar=True, si_procede=True, stdout=StringIO())
+        self.assertEqual(self.client.get('/api/admin/alumnos/').status_code, 503)
+        self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': next(iter(ids))}).status_code, 503)
+        self.assertEqual(ids, set(muestra.usuarios.values_list('pk', flat=True)))
+        self.assertEqual(get_user_model().objects.filter(is_staff=False).count(), 136)
+
+    def test_arranque_sin_poblacion_completa_espera_sin_completar_con_otros(self):
+        get_user_model().objects.filter(is_staff=False).first().delete()
+        salida = StringIO()
+        call_command('seleccionar_estudio', aplicar=True, si_procede=True, stdout=salida)
+        self.assertEqual(json.loads(salida.getvalue())['estado'], 'pendiente_de_poblacion')
+        self.assertFalse(MuestraEstudio.objects.exists())

@@ -30,6 +30,9 @@ def variable_lista(nombre, defecto):
 
 # Sin variables se conserva el arranque local. Compose configura producción.
 DEBUG = variable_bool('DJANGO_DEBUG', True)
+# Dokploy usa DEBUG=false: el listado del estudio exige la muestra fija de 110.
+# El desarrollo local puede seguir usando su propia base sin importar alumnos.
+ESTUDIO_MUESTRA_OBLIGATORIA = not DEBUG
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-solo-desarrollo-local')
 if not DEBUG and (len(SECRET_KEY) < 50 or len(set(SECRET_KEY)) < 5 or SECRET_KEY.startswith('django-insecure-')):
     raise ImproperlyConfigured('Configura DJANGO_SECRET_KEY con una clave aleatoria de al menos 50 caracteres.')

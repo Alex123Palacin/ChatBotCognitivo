@@ -52,4 +52,10 @@ Las comprobaciones se hicieron localmente; no se publicó ni se modificó el ser
 
 ## Datos y escenario del 11 de septiembre
 
-Los datos anteriores se conservan. No se ejecutó ningún script de carga, borrado, intercambio o cambio de fechas. El nuevo lote del **11 de septiembre de 1:00 p. m. a 6:00 p. m.** sigue pendiente para una etapa posterior; no se fijó un año ni se alteraron fechas para aparentar esa interacción.
+Los datos anteriores y la base habitual se conservan. Se preparó un paquete independiente para el **11 de septiembre de 2026, de 1:00 p. m. a 6:00 p. m., hora de Lima**, con 136 cuentas, 136 conversaciones, 7.420 mensajes y 1.144 citas verificadas. Contiene 4 perfiles sin dificultades expresadas, 32 con una, 36 con dos, 36 con tres y 28 con cuatro; el afrontamiento se distribuye como recursos independientes.
+
+La carga se probó sobre una **base local aislada**. Su procedencia y su método de anotación estructurada se conservan internamente; no se atribuyen estos textos ni estas evidencias a participantes reales o a una ejecución de Ollama que no haya ocurrido. No se fabrican aceptaciones de términos ni se modifica la política de cuentas reales.
+
+El ZIP portable, sus instrucciones operativas y los accesos privados están en `entregas_locales/actividad_20260911/`, excluida de Git. Los accesos legibles y la base local no se incluyen en el ZIP. Para revisar la web usar `ver_actividad_local.ps1`; para la operación del servidor consultar [la guía de carga](herramientas/carga_actividad/README.md). El VPS queda pendiente de la ejecución de su operador: no se publicó ni importó este lote desde aquí.
+
+Validación de esta etapa: **160 pruebas de backend correctas**, carga completa e idempotente de las 136 cuentas, consulta de sus 136 análisis, acceso por CSRF, permisos, exportaciones de 100 y 36 cuentas, ciclo del worker sin pendientes ni eliminación de la muestra, y huella de la base habitual sin cambios. Se comprobaron además el cargador portable con configuración de producción y tres recorridos de Chrome con API real local (chat de escritorio, móvil y administración), sin errores de interfaz. No se ejecutó una prueba dentro del VPS.

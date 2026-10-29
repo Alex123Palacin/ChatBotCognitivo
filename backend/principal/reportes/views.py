@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Count, Min, Max, Q
@@ -11,7 +12,7 @@ from sesiones.models import SesionSemanal
 from sesiones.services import sesion_json
 from .models import ReporteSemanal
 from .services import NOTA_METODO, dimensiones_json, resumen_json, reporte_conversacion_json
-from .estudio import muestra_actual, muestra_json, acotar_mensajes
+from .estudio import muestra_actual, muestra_json, muestra_valida, acotar_mensajes
 from .indicadores import perfil_indicadores
 
 User = get_user_model()
@@ -29,6 +30,8 @@ def alumno_json(usuario, ahora=None, muestra=None):
 def alumnos(request):
     ahora = timezone.now()
     muestra = muestra_actual()
+    if settings.ESTUDIO_MUESTRA_OBLIGATORIA and not muestra_valida(muestra):
+        return error('La muestra fija de 110 estudiantes no está disponible. No se han incluido otras cuentas.', 503)
     usuarios = User.objects.filter(is_staff=False, is_superuser=False)
     if muestra:
         usuarios = usuarios.filter(muestras_estudio=muestra)
@@ -63,6 +66,8 @@ def exportar(request):
         raise ValueError('Selecciona entre 1 y 110 estudiantes para descargar.')
     ids = {int(v) for v in valores}
     muestra = muestra_actual()
+    if settings.ESTUDIO_MUESTRA_OBLIGATORIA and not muestra_valida(muestra):
+        return error('La muestra fija de 110 estudiantes no está disponible. No se han incluido otras cuentas.', 503)
     if muestra and not ids.issubset(set(muestra.usuarios.values_list('pk', flat=True))):
         return error('La descarga del estudio solo incluye estudiantes de la muestra seleccionada.', 400)
     usuarios = list(User.objects.filter(pk__in=ids, is_staff=False, is_superuser=False).select_related('perfil').order_by('first_name', 'pk'))

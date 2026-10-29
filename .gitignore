@@ -1,4 +1,5 @@
 # Variables de entorno y secretos (conservar plantillas sin credenciales)
+/entregas_locales/
 .env
 .env.*
 !.env.example
