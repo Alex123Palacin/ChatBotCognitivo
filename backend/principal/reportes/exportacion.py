@@ -59,6 +59,10 @@ def crear_excel(usuarios, ahora=None):
     ahora = ahora or timezone.now()
     usuarios = sorted(usuarios, key=lambda usuario: usuario.pk)
     datos = datos_indicadores(usuarios, ahora)
+    muestra = muestra_actual()
+    periodo = (f'Mensajes del {hora_lima(muestra.inicio)} al {hora_lima(muestra.fin)} (fin exclusivo), hora de Lima. '
+               'Sin dividir en semanas ni suponer una comparación inicial/final.' if muestra else
+               'Actividad disponible hasta la fecha de exportación, sin dividir en semanas ni suponer una comparación inicial/final.')
 
     libro = Workbook()
     libro.remove(libro.active)
@@ -74,7 +78,7 @@ def crear_excel(usuarios, ahora=None):
     for fila in [
         ('Documento', 'Frecuencias declaradas por indicador · versión 3'),
         ('Exportado', hora_lima(ahora)),
-        ('Periodo', 'Actividad disponible hasta la fecha de exportación, sin dividir en semanas ni suponer una comparación inicial/final. No se asignan fechas de una intervención que todavía no ha sido configurada.'),
+        ('Periodo', periodo),
         ('Escala', '1 = Nunca; 2 = Rara vez; 3 = Algunas veces; 4 = Casi siempre; 5 = Siempre.'),
         ('Fuente', 'Frecuencias explícitas del estudiante vinculadas a un indicador y a un contexto temporal inequívoco. También se admite una respuesta tras una pregunta inequívoca del chatbot, en la misma sesión y dentro de dos horas. Se conservan las expresiones del estudiante; no se adivinan frecuencias.'),
         ('Dificultades', 'Sobrecarga, presión del tiempo y síntomas: mayor valor significa una dificultad relatada con mayor frecuencia.'),
@@ -84,7 +88,6 @@ def crear_excel(usuarios, ahora=None):
         ('Identificadores', 'ID interno y nombre de usuario. No se incluyen nombres personales, correos, contraseñas ni conversaciones.'),
     ]:
         agregar(ficha, fila)
-    muestra = muestra_actual()
     if muestra:
         agregar(ficha, ('Selección', f'Muestra aleatoria fija de {muestra.tamano} estudiantes entre {len(muestra.poblacion_ids)}; fecha de selección: {hora_lima(muestra.creada)}. La descarga contiene los estudiantes solicitados dentro de esa muestra.'))
         agregar(ficha, ('Ventana de estudio', f'{hora_lima(muestra.inicio)} a {hora_lima(muestra.fin)} · America/Lima.'))
