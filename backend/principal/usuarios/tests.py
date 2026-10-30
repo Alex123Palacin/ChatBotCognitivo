@@ -106,7 +106,7 @@ class CuentasTests(TestCase):
         self.assertEqual(respuesta.status_code, 200)
         self.assertTrue(respuesta.json()['usuario']['es_admin'])
         self.assertEqual(respuesta.json()['usuario']['username'], 'admin')
-        self.assertEqual(self.client.get('/api/admin/alumnos/').status_code, 200)
+        self.assertEqual(self.client.get('/api/admin/alumnos/', HTTP_X_ADMIN_PESTANA=respuesta.json()['admin_pestana']).status_code, 200)
 
     def test_login_rechaza_datos_invalidos_con_error_generico(self):
         for datos in [

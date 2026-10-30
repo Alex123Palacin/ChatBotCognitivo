@@ -12,6 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from principal.http import acceso, datos_json, error
 from .models import Perfil
+from .sesion_admin import preparar_sesion_admin, renovar_sesion_admin
 from .retencion import DIAS_RETENCION, VERSION_ANTERIOR, VERSION_TERMINOS, VERSIONES_CON_RETENCION, politica_json, renovar_retencion
 
 User = get_user_model()
@@ -125,7 +126,16 @@ def iniciar_sesion(request):
     perfil.conectado = True
     perfil.save(update_fields=['ultima_actividad', 'conectado'])
     renovar_retencion(usuario)
-    return JsonResponse({'usuario': usuario_json(usuario)})
+    respuesta = {'usuario': usuario_json(usuario)}
+    if usuario.is_staff:
+        respuesta['admin_pestana'] = preparar_sesion_admin(request)
+    return JsonResponse(respuesta)
+
+
+@acceso(['POST'], administrador=True)
+def actividad_admin(request):
+    renovar_sesion_admin(request)
+    return JsonResponse({'estado': 'ok'})
 
 
 @acceso(['POST'])

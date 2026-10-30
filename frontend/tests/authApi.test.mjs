@@ -1,10 +1,25 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 import { iniciarSesionApi, obtenerTerminosRegistro, obtenerUsuario, registrarApi } from '../src/api/authApi.ts'
+import { guardarTokenAdmin, tokenAdmin } from '../src/api/sesionAdmin.ts'
 
 const fetchOriginal = globalThis.fetch
 const administrador = { id: 1, email: '', nombre: 'Administrador', username: 'admin', es_admin: true }
-afterEach(() => { globalThis.fetch = fetchOriginal })
+afterEach(() => { globalThis.fetch = fetchOriginal; guardarTokenAdmin('') })
+
+test('el acceso admin conserva la autorización de pestaña y la envía al servidor', async () => {
+  globalThis.fetch = async (url, opciones) => {
+    if (url === '/api/csrf/') return Response.json({ csrfToken: 'csrf' })
+    if (url === '/api/auth/login/') return Response.json({ usuario: administrador, admin_pestana: 'permiso-de-pestana' })
+    assert.equal(opciones.headers['X-Admin-Pestana'], 'permiso-de-pestana')
+    return Response.json({ usuario: administrador })
+  }
+  await iniciarSesionApi('admin', 'clave')
+  assert.equal(tokenAdmin(), 'permiso-de-pestana')
+  assert.equal((await obtenerUsuario()).usuario.es_admin, true)
+  guardarTokenAdmin('')
+  assert.equal(tokenAdmin(), '')
+})
 
 test('todos los accesos envían username, incluidos los identificadores heredados', async () => {
   const credenciales = []

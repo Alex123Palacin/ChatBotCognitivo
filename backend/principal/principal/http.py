@@ -27,6 +27,10 @@ def acceso(metodos, administrador=False, estudiante=False, publico=False):
         def ejecutar(request, *args, **kwargs):
             if request.method not in metodos:
                 return error('Método no permitido.', 405)
+            if request.path not in ('/api/auth/login/', '/api/csrf/', '/api/auth/terminos/', '/api/salud/'):
+                from usuarios.sesion_admin import sesion_admin_valida
+                if not sesion_admin_valida(request):
+                    return error('La sesión administrativa terminó. Inicia sesión nuevamente.', 401)
             if not publico and not request.user.is_authenticated:
                 return error('Inicia sesión para continuar.', 401)
             if administrador and not request.user.is_staff:

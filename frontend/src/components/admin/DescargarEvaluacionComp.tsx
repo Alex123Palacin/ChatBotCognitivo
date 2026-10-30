@@ -30,7 +30,7 @@ function DescargarEvaluacionComp({ alumnos }: { alumnos: number[] }) {
 
   return <div className="space-y-2">
     <BotonUI onClick={descargar} disabled={descargando || !alumnos.length || alumnos.length > 110} aria-busy={descargando}>
-      <Download size={17} aria-hidden="true" />{descargando ? 'Preparando Excel…' : `Descargar Excel · ${alumnos.length} ${alumnos.length === 1 ? 'estudiante' : 'estudiantes'}`}
+      <Download size={17} aria-hidden="true" />{descargando ? 'Preparando reporte…' : 'Descargar reporte'}
     </BotonUI>
     <p className="max-w-xl text-xs leading-relaxed text-slate-500">Excel de {alumnos.length} {alumnos.length === 1 ? 'estudiante' : 'estudiantes'}: ID, usuario y análisis cualitativo de los siete indicadores, con sus evidencias de respaldo. Cada indicador distingue lo relatado, la ausencia expresada y los temas no mencionados.</p>
     {alumnos.length > 110 && <p className="text-xs text-amber-700">La descarga admite hasta 110 estudiantes.</p>}

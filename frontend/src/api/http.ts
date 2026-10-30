@@ -1,3 +1,5 @@
+import { tokenAdmin } from './sesionAdmin.ts'
+
 export class ErrorApi extends Error {
   status: number
 
@@ -19,7 +21,9 @@ async function obtenerCsrf(signal: AbortSignal): Promise<string> {
   const limite = AbortSignal.timeout(10_000)
   const combinado = AbortSignal.any([signal, limite])
   try {
-    const respuesta = await fetch('/api/csrf/', { credentials: 'same-origin', signal: combinado })
+    const token = tokenAdmin()
+    const respuesta = await fetch('/api/csrf/', { credentials: 'same-origin', signal: combinado,
+      headers: token ? { 'X-Admin-Pestana': token } : {} })
     const datos = await respuesta.json().catch(() => null)
     if (!respuesta.ok || typeof datos?.csrfToken !== 'string') {
       throw new ErrorApi('No se pudo preparar la conexión con Django.', respuesta.status)
@@ -49,6 +53,8 @@ export async function peticionFlujoApi<T>(ruta: string, opciones: OpcionesApi,
 
   try {
     const headers: Record<string, string> = {}
+    const token = tokenAdmin()
+    if (token) headers['X-Admin-Pestana'] = token
     if (opciones.body !== undefined) headers['Content-Type'] = 'application/json'
     // Django cambia el token al iniciar sesión; por eso se obtiene antes de cada escritura.
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) headers['X-CSRFToken'] = await obtenerCsrf(signal)

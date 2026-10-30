@@ -26,7 +26,7 @@ function MarcoAdminComp({ titulo, descripcion, children }: { titulo: string; des
 
   return (
     <div className="min-h-dvh min-w-0 bg-linear-to-br from-slate-50 via-blue-50/30 to-indigo-50/40">
-      <header className="border-b border-slate-200 bg-white/95">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
           <Link to="/administrador" className="text-base font-semibold text-slate-900 sm:text-lg">Chatbot Cognitivo <span className="ml-2 inline-block text-xs font-normal text-slate-500">Administración</span></Link>
           <div className="flex items-center gap-3">

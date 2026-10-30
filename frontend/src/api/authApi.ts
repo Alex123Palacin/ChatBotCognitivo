@@ -1,4 +1,5 @@
 import { peticionApi } from './http.ts'
+import { guardarTokenAdmin, tokenAdmin } from './sesionAdmin.ts'
 import type { AceptacionTerminos, RespuestaAuth, TerminosRegistro, Usuario } from '../types/auth'
 
 function validarUsuario(valor: unknown): Usuario {
@@ -21,7 +22,8 @@ export async function obtenerUsuario(): Promise<{ usuario: Usuario | null }> {
 
 export async function iniciarSesionApi(identificador: string, password: string): Promise<RespuestaAuth> {
   const credenciales = { username: identificador.trim().toLowerCase(), password }
-  const datos = await peticionApi<{ usuario: unknown }>('/api/auth/login/', { method: 'POST', body: credenciales })
+  const datos = await peticionApi<{ usuario: unknown; admin_pestana?: string }>('/api/auth/login/', { method: 'POST', body: credenciales })
+  guardarTokenAdmin(typeof datos.admin_pestana === 'string' ? datos.admin_pestana : '')
   return { usuario: validarUsuario(datos.usuario) }
 }
 
@@ -46,6 +48,9 @@ export async function registrarApi(nombre: string, username: string, password: s
   return { usuario: validarUsuario(datos.usuario) }
 }
 
-export function cerrarSesionApi(): Promise<{ usuario: null }> {
-  return peticionApi('/api/auth/logout/', { method: 'POST' })
+export async function cerrarSesionApi(): Promise<{ usuario: null }> {
+  const token = tokenAdmin()
+  const respuesta = await peticionApi<{ usuario: null }>('/api/auth/logout/', { method: 'POST' })
+  if (tokenAdmin() === token) guardarTokenAdmin('')
+  return respuesta
 }

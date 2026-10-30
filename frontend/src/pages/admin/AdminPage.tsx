@@ -9,8 +9,7 @@ function AdminPage() {
   return <MarcoAdminComp titulo="Panel administrativo" descripcion="Siete indicadores de análisis cualitativo, organizados en las tres dimensiones del proyecto.">
     <EstadoCargaComp cargando={cargando} error={error} reintentar={refrescar} />
     {!cargando && <>
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-sm font-medium text-slate-600">Población registrada</p><p className="mt-2 text-3xl font-semibold">{estudio?.poblacion ?? alumnos.length}</p><p className="mt-2 text-xs text-slate-500">Las cuentas y sus conversaciones se conservan.</p></div>
+      <div className="mb-6">
         <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5"><p className="text-sm font-medium text-blue-800">Casos seleccionados</p><p className="mt-2 text-3xl font-semibold">{estudio?.seleccionados ?? 0}</p><p className="mt-2 text-xs text-slate-600">{estudio ? '11 de septiembre de 2026, de 13:00 a 18:00 · Lima' : 'La muestra del estudio todavía no está configurada.'}</p></div>
       </div>
       <details className="mb-6 rounded-xl border border-slate-200 bg-white p-4 text-sm">

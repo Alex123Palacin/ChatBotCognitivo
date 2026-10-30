@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { cerrarSesionApi, iniciarSesionApi, obtenerUsuario, registrarApi } from '../../api/authApi'
 import { AuthContext } from '../../hooks/useAuth'
 import type { AceptacionTerminos, Usuario } from '../../types/auth'
+import { guardarTokenAdmin } from '../../api/sesionAdmin'
+import { peticionApi } from '../../api/http'
 
 function AuthProviderComp({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null)
@@ -43,6 +45,7 @@ function AuthProviderComp({ children }: { children: ReactNode }) {
       if (!cancelado && version === versionSesion.current) setCargando(false)
     })
     const alCaducar = () => {
+      guardarTokenAdmin('')
       versionSesion.current += 1
       setUsuario(null)
       setCargando(false)
@@ -62,6 +65,56 @@ function AuthProviderComp({ children }: { children: ReactNode }) {
       window.removeEventListener('storage', alCambiarPestana)
     }
   }, [refrescarUsuario])
+
+  useEffect(() => {
+    if (!usuario?.es_admin) return
+    const plazo = 10 * 60 * 1000
+    let ultimaActividad = Date.now()
+    let actividadPendiente = false
+    let ultimoAviso = Date.now()
+    let cerrando = false
+    const caducar = () => {
+      if (cerrando) return
+      cerrando = true
+      const version = ++versionSesion.current
+      // Bloquea la vista aunque una desconexión impida completar el logout.
+      void cerrarSesionApi().catch(() => {}).finally(() => {
+        if (version !== versionSesion.current) return
+        guardarTokenAdmin('')
+        setUsuario(null)
+        setCargando(false)
+        setError('La sesión administrativa terminó por inactividad.')
+        avisarOtrasPestanas()
+      })
+      setUsuario(null)
+      setCargando(true)
+    }
+    const actividad = (evento: Event) => {
+      if (!evento.isTrusted || document.visibilityState === 'hidden' || cerrando) return
+      if (Date.now() - ultimaActividad >= plazo) { caducar(); return }
+      ultimaActividad = Date.now()
+      actividadPendiente = true
+    }
+    const comprobar = () => {
+      if (Date.now() - ultimaActividad >= plazo) { caducar(); return }
+      if (actividadPendiente && !cerrando && Date.now() - ultimoAviso >= 15_000) {
+        actividadPendiente = false
+        ultimoAviso = Date.now()
+        void peticionApi('/api/auth/actividad-admin/', { method: 'POST' }).catch(() => {})
+      }
+    }
+    const eventos = ['pointerdown', 'pointermove', 'keydown', 'scroll', 'touchstart']
+    eventos.forEach(nombre => window.addEventListener(nombre, actividad, { passive: true, capture: true }))
+    document.addEventListener('visibilitychange', comprobar)
+    window.addEventListener('focus', comprobar)
+    const intervalo = window.setInterval(comprobar, 1000)
+    return () => {
+      window.clearInterval(intervalo)
+      eventos.forEach(nombre => window.removeEventListener(nombre, actividad, true))
+      document.removeEventListener('visibilitychange', comprobar)
+      window.removeEventListener('focus', comprobar)
+    }
+  }, [usuario?.es_admin])
 
   async function iniciarSesion(identificador: string, password: string): Promise<Usuario> {
     const version = ++versionSesion.current

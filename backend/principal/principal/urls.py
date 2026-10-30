@@ -15,6 +15,7 @@ urlpatterns = [
     path('api/auth/login/', auth_views.iniciar_sesion),
     path('api/auth/logout/', auth_views.cerrar_sesion),
     path('api/auth/me/', auth_views.me),
+    path('api/auth/actividad-admin/', auth_views.actividad_admin),
     path('api/chat/', chat_views.chat),
     path('api/chat/flujo/', chat_views.chat_flujo),
     path('api/admin/alumnos/', reportes_views.alumnos),
