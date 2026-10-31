@@ -18,14 +18,44 @@ function DescargarOficial([string]$url, [string]$destino) {
     if (Test-Path -LiteralPath $destino -PathType Leaf) { return }
     $ProgressPreference = 'SilentlyContinue'
     $temporal = $destino + '.parte'
-    try {
-        Write-Host "Descargando desde $($uri.Host). No cierres esta ventana..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri $url -OutFile $temporal -UseBasicParsing -TimeoutSec 3600
-        Move-Item -LiteralPath $temporal -Destination $destino -Force
-    } catch {
-        # No se utiliza un archivo incompleto en el siguiente intento.
-        if (Test-Path -LiteralPath $temporal) { Remove-Item -LiteralPath $temporal -Force }
-        throw "No se pudo descargar desde $($uri.Host). Revisa Internet y vuelve a abrir iniciar.bat."
+    for ($intentoDescarga = 1; $intentoDescarga -le 3; $intentoDescarga++) {
+        try {
+            Write-Host "Descargando desde $($uri.Host) (intento $intentoDescarga/3). No cierres esta ventana..." -ForegroundColor Yellow
+            Invoke-WebRequest -Uri $url -OutFile $temporal -UseBasicParsing -TimeoutSec 3600
+            if ((Get-Item -LiteralPath $temporal).Length -eq 0) { throw 'La descarga esta vacia.' }
+            Move-Item -LiteralPath $temporal -Destination $destino -Force
+            return
+        } catch {
+            # Nunca se ejecuta ni se reutiliza una descarga incompleta.
+            if (Test-Path -LiteralPath $temporal) { Remove-Item -LiteralPath $temporal -Force }
+            if ($intentoDescarga -eq 3) {
+                throw "No se pudo descargar desde $($uri.Host). Revisa Internet y vuelve a abrir iniciar.bat."
+            }
+            Write-Host 'Se interrumpio la descarga. Se intentara nuevamente...' -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+        }
+    }
+}
+
+function PrepararModeloLocal([string]$ejecutableOllama, [string]$nombreModelo) {
+    for ($intentoModelo = 1; $intentoModelo -le 3; $intentoModelo++) {
+        try {
+            Write-Host "Preparando $nombreModelo (intento $intentoModelo/3). La primera vez puede tardar bastante." -ForegroundColor Yellow
+            # Ollama reutiliza las partes que ya termino de descargar.
+            & $ejecutableOllama pull $nombreModelo
+            if ($LASTEXITCODE -ne 0) { throw 'La descarga del modelo no termino.' }
+            $disponibles = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 10
+            if (-not @($disponibles.models | Where-Object { $_.name -eq $nombreModelo }).Count) {
+                throw 'Ollama todavia no confirma el modelo descargado.'
+            }
+            return
+        } catch {
+            if ($intentoModelo -eq 3) {
+                throw "No se pudo preparar $nombreModelo. Revisa Internet y el espacio libre; vuelve a abrir iniciar.bat para reanudar."
+            }
+            Write-Host 'Reintentando la descarga del modelo...' -ForegroundColor Yellow
+            Start-Sleep -Seconds 2
+        }
     }
 }
 

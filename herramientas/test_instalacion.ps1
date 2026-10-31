@@ -17,11 +17,14 @@ function DebeFallar([scriptblock]$accion) {
 # Sustituciones locales: jamas se ejecuta un instalador de verdad en estas pruebas.
 $script:descargas = 0
 $script:errorDescarga = $false
+$script:fallosRestantes = 0
+function Start-Sleep { param($Seconds); }
 function Invoke-WebRequest {
     param($Uri, $OutFile, [switch]$UseBasicParsing, $TimeoutSec)
     $script:descargas++
     [IO.File]::WriteAllText($OutFile, 'contenido de prueba')
     if ($script:errorDescarga) { throw 'Conexion interrumpida' }
+    if ($script:fallosRestantes -gt 0) { $script:fallosRestantes--; throw 'Interrupcion temporal' }
 }
 $script:firma = 'Valid'
 $script:editor = 'CN=Python Software Foundation'
@@ -54,8 +57,15 @@ try {
     DebeFallar { DescargarOficial 'https://python.org.sitio-ajeno.invalid/archivo.exe' (Join-Path $temporalPrueba 'ajeno.exe') }
     $script:errorDescarga = $true
     $incompleto = Join-Path $temporalPrueba 'interrumpido.exe'
+    $descargasAntes = $script:descargas
     DebeFallar { DescargarOficial 'https://ollama.com/download/OllamaSetup.exe' $incompleto }
+    Comprobar ($script:descargas - $descargasAntes -eq 3) 'Debe reintentar tres veces antes de informar el fallo.'
     Comprobar (-not (Test-Path -LiteralPath $incompleto) -and -not (Test-Path -LiteralPath ($incompleto + '.parte'))) 'No se debe conservar un instalador incompleto.'
+    $script:errorDescarga = $false
+    $script:fallosRestantes = 1
+    $descargasAntes = $script:descargas
+    DescargarOficial 'https://ollama.com/download/OllamaSetup.exe' $incompleto
+    Comprobar ($script:descargas - $descargasAntes -eq 2 -and (Test-Path -LiteralPath $incompleto)) 'Debe recuperarse automaticamente de una interrupcion temporal.'
     ComprobarFirma $archivo 'Python Software Foundation'
     $script:firma = 'HashMismatch'
     DebeFallar { ComprobarFirma $archivo 'Python Software Foundation' }
@@ -90,6 +100,27 @@ try {
     $ollamaPrueba = InstalarOllamaLocal
     Comprobar ($ollamaPrueba -eq (Join-Path $temporalPrueba 'ollama.exe')) 'Debe devolver la ruta de Ollama instalado.'
     Comprobar ($script:ultimosArgumentos -contains '/NORESTART' -and $script:ultimosArgumentos -contains '/VERYSILENT') 'La instalacion de Ollama no debe reiniciar Windows automaticamente.'
+    # Modelos ausentes en un equipo nuevo: reanuda y confirma antes de continuar.
+    $script:descargasModelo = 0
+    $script:modeloConfirmado = $true
+    function OllamaSimulado {
+        param($accion, $modelo)
+        Comprobar ($accion -eq 'pull') 'Debe descargar el modelo solicitado.'
+        $script:descargasModelo++
+        $global:LASTEXITCODE = 0
+        if ($script:descargasModelo -eq 1) { $global:LASTEXITCODE = 1 }
+    }
+    function Invoke-RestMethod {
+        param($Uri, $TimeoutSec)
+        if ($script:modeloConfirmado) { return @{ models = @(@{ name = 'qwen3:1.7b' }) } }
+        return @{ models = @() }
+    }
+    PrepararModeloLocal 'OllamaSimulado' 'qwen3:1.7b'
+    Comprobar ($script:descargasModelo -eq 2) 'Debe reanudar la descarga y confirmar el modelo.'
+    $script:modeloConfirmado = $false
+    $script:descargasModelo = 0
+    DebeFallar { PrepararModeloLocal 'OllamaSimulado' 'qwen3:1.7b' }
+    Comprobar ($script:descargasModelo -eq 3) 'No debe continuar si Ollama no confirma el modelo.'
     Write-Host "$script:comprobaciones comprobaciones correctas. No se instalaron programas."
 } finally {
     # El directorio se crea arriba; se valida antes de su unica limpieza recursiva.

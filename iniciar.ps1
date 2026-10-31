@@ -72,6 +72,8 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $raizProyecto $necesario) -PathType Leaf)) { throw 'Faltan archivos. Extrae el ZIP completo en una carpeta y abre iniciar.bat desde alli.' }
     }
     Write-Host 'CHATBOT COGNITIVO - INICIO LOCAL' -ForegroundColor Cyan
+    Write-Host 'Este inicio prepara Python, Node.js, Ollama, los modelos y la base local si faltan.'
+    Write-Host 'La primera vez necesita Internet y espacio para varios GB. No necesitas Docker.'
     New-Item -ItemType Directory -Path $carpetaLogs -Force | Out-Null
     try {
         $bloqueoProyecto = [System.IO.File]::Open((Join-Path $carpetaLogs 'inicio.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
@@ -81,6 +83,7 @@ try {
         throw 'Otra ventana ya esta preparando este proyecto. Espera a que indique LISTO; despues puedes volver a dar doble clic.'
     }
     . (Join-Path $raizProyecto 'herramientas\instalar_dependencias.ps1')
+    [void](ArquitecturaLocal)
     # TLS para las descargas oficiales; no se modifica la validacion de certificados.
     $tlsAnteriorProyecto = [Net.ServicePointManager]::SecurityProtocol
     [Net.ServicePointManager]::SecurityProtocol = $tlsAnteriorProyecto -bor [Net.SecurityProtocolType]::Tls12
@@ -175,7 +178,7 @@ try {
         Write-Host '[2/5] Instalando las dependencias de la interfaz...'
         Push-Location $carpetaFrontend
         try {
-            & $npm ci --include=dev --no-fund --no-audit
+            & $npm ci --include=dev --no-fund --no-audit --fetch-retries=3 --fetch-timeout=60000
             if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar React. Revisa Internet y package-lock.json.' }
         } finally { Pop-Location }
         Set-Content -LiteralPath $marcaReact -Value $huellaReact -Encoding ASCII
@@ -200,9 +203,7 @@ try {
     foreach ($modeloNecesario in @($variablesLocales.OLLAMA_CHAT_MODEL, $variablesLocales.OLLAMA_MODEL) | Select-Object -Unique) {
         if (-not @($modelos.models | Where-Object { $_.name -eq $modeloNecesario }).Count) {
             if (-not $ollama) { $ollama = InstalarOllamaLocal }
-            Write-Host "Primera descarga de $modeloNecesario. Espera a que termine; no cierres esta ventana." -ForegroundColor Yellow
-            & $ollama pull $modeloNecesario
-            if ($LASTEXITCODE -ne 0) { throw 'La descarga no termino. Revisa Internet y vuelve a iniciar para reanudarla.' }
+            PrepararModeloLocal $ollama $modeloNecesario
             $modelos = Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5
             if (-not @($modelos.models | Where-Object { $_.name -eq $modeloNecesario }).Count) { throw 'Ollama no confirma que el modelo este descargado.' }
         }
