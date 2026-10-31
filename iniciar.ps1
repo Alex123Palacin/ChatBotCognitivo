@@ -11,6 +11,9 @@ $procesosProyecto = New-Object System.Collections.ArrayList
 $variablesAnteriores = @{}
 $bloqueoProyecto = $null
 $codigoSalidaProyecto = 0
+$tlsAnteriorProyecto = $null
+$estadoInicio = Join-Path $carpetaLogs 'inicio-estado.json'
+$esDuenoDelInicio = $false
 
 function BuscarPrograma([string]$nombre, [string[]]$alternativas = @()) {
     $comando = Get-Command $nombre -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -48,12 +51,35 @@ function EsperarServicio([string]$url, [string]$campo, [string]$valor, $proceso,
     }
     throw "No respondio $url. Revisa logs/ y vuelve a iniciar."
 }
+function AbrirInicioExistente {
+    if (-not (Test-Path -LiteralPath $estadoInicio -PathType Leaf)) { return $false }
+    try {
+        $estado = Get-Content -LiteralPath $estadoInicio -Raw | ConvertFrom-Json
+        foreach ($registro in @($estado.backend, $estado.frontend)) {
+            $proceso = Get-Process -Id ([int]$registro.Id) -ErrorAction Stop
+            if ([Math]::Abs(($proceso.StartTime.ToUniversalTime() - ([datetime]$registro.Inicio).ToUniversalTime()).TotalMilliseconds) -gt 2) { return $false }
+        }
+        $salud = Invoke-RestMethod -Uri 'http://127.0.0.1:5173/api/salud/' -TimeoutSec 3
+        if ($salud.estado -ne 'ok') { return $false }
+        if (-not $Verificar) { Start-Process 'http://localhost:5173' }
+        Write-Host 'El programa ya esta funcionando: http://localhost:5173' -ForegroundColor Green
+        return $true
+    } catch { return $false }
+}
 try {
+    if ($env:OS -ne 'Windows_NT') { throw 'Este iniciador corresponde a Windows.' }
+    foreach ($necesario in @('backend\requirements.txt', 'backend\principal\manage.py', 'frontend\package.json', 'frontend\package-lock.json', 'herramientas\instalar_dependencias.ps1')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $raizProyecto $necesario) -PathType Leaf)) { throw 'Faltan archivos. Extrae el ZIP completo en una carpeta y abre iniciar.bat desde alli.' }
+    }
     Write-Host 'CHATBOT COGNITIVO - INICIO LOCAL' -ForegroundColor Cyan
     New-Item -ItemType Directory -Path $carpetaLogs -Force | Out-Null
     try {
         $bloqueoProyecto = [System.IO.File]::Open((Join-Path $carpetaLogs 'inicio.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
-    } catch { throw 'Otra ventana ya esta iniciando o ejecutando este proyecto. Revisa esa ventana.' }
+        $esDuenoDelInicio = $true
+    } catch {
+        if (AbrirInicioExistente) { exit 0 }
+        throw 'Otra ventana ya esta preparando este proyecto. Espera a que indique LISTO; despues puedes volver a dar doble clic.'
+    }
     . (Join-Path $raizProyecto 'herramientas\instalar_dependencias.ps1')
     # TLS para las descargas oficiales; no se modifica la validacion de certificados.
     $tlsAnteriorProyecto = [Net.ServicePointManager]::SecurityProtocol
@@ -124,10 +150,26 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear el entorno Python del proyecto.' }
     }
     Write-Host '[1/5] Comprobando las dependencias de Python...'
-    & $pythonProyecto -m pip install --disable-pip-version-check -r (Join-Path $raizProyecto 'backend\requirements.txt')
-    if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar Python. Revisa Internet; no copies backend/.venv desde otro equipo.' }
+    $archivoRequisitos = Join-Path $raizProyecto 'backend\requirements.txt'
+    $huellaPython = (Get-FileHash -LiteralPath $archivoRequisitos -Algorithm SHA256).Hash + ((& $pythonProyecto --version) | Out-String).Trim()
+    $marcaPython = Join-Path $carpetaLogs 'dependencias-python.sha256'
+    $dependenciasPythonListas = $false
+    if ((Test-Path -LiteralPath $marcaPython) -and (Get-Content -LiteralPath $marcaPython -Raw).Trim() -eq $huellaPython) {
+        & $pythonProyecto -m pip check *> $null
+        if ($LASTEXITCODE -eq 0) {
+            & $pythonProyecto -c 'import django, openpyxl' *> $null
+            $dependenciasPythonListas = $LASTEXITCODE -eq 0
+        }
+    }
+    if (-not $dependenciasPythonListas) {
+        & $pythonProyecto -m pip install --disable-pip-version-check -r $archivoRequisitos
+        if ($LASTEXITCODE -ne 0) { throw 'No se pudo preparar Python. Revisa Internet; no copies backend/.venv desde otro equipo.' }
+        & $pythonProyecto -m pip check
+        if ($LASTEXITCODE -ne 0) { throw 'Las dependencias de Python no son compatibles. Revisa logs/.' }
+        Set-Content -LiteralPath $marcaPython -Value $huellaPython -Encoding ASCII
+    }
 
-    $huellaReact = (Get-FileHash -LiteralPath (Join-Path $carpetaFrontend 'package-lock.json') -Algorithm SHA256).Hash + (Get-FileHash -LiteralPath (Join-Path $carpetaFrontend 'package.json') -Algorithm SHA256).Hash
+    $huellaReact = (Get-FileHash -LiteralPath (Join-Path $carpetaFrontend 'package-lock.json') -Algorithm SHA256).Hash + (Get-FileHash -LiteralPath (Join-Path $carpetaFrontend 'package.json') -Algorithm SHA256).Hash + ((& $node --version) | Out-String).Trim()
     $marcaReact = Join-Path $carpetaLogs 'dependencias-react.sha256'
     if (-not (Test-Path -LiteralPath (Join-Path $carpetaFrontend 'node_modules\.bin\vite.cmd')) -or -not (Test-Path -LiteralPath $marcaReact) -or (Get-Content -LiteralPath $marcaReact -Raw).Trim() -ne $huellaReact) {
         Write-Host '[2/5] Instalando las dependencias de la interfaz...'
@@ -185,6 +227,10 @@ try {
     if ($pagina.StatusCode -ne 200 -or $pagina.Content -notmatch 'id="root"') { throw 'La pantalla de React no se pudo cargar.' }
     $csrf = Invoke-RestMethod -Uri 'http://127.0.0.1:5173/api/csrf/' -TimeoutSec 5
     if (-not $csrf.csrfToken) { throw 'La interfaz no pudo comunicarse con Django.' }
+    @{
+        backend = @{ Id = $backend.Id; Inicio = $backend.StartTime.ToUniversalTime().ToString('o') }
+        frontend = @{ Id = $frontend.Id; Inicio = $frontend.StartTime.ToUniversalTime().ToString('o') }
+    } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $estadoInicio -Encoding UTF8
     Write-Host ''
     Write-Host 'LISTO: http://localhost:5173' -ForegroundColor Green
     Write-Host 'Panel: http://localhost:5173/administrador'
@@ -204,6 +250,10 @@ try {
     for ($indice = $procesosProyecto.Count - 1; $indice -ge 0; $indice--) {
         $registro = $procesosProyecto[$indice]
         DetenerProcesoProyecto $registro.Id $registro.Inicio
+    }
+    if ($esDuenoDelInicio) {
+        # Estado vacio: conserva el archivo sin dejar identificadores reutilizables.
+        Set-Content -LiteralPath $estadoInicio -Value '{}' -Encoding UTF8
     }
     foreach ($nombre in $variablesAnteriores.Keys) {
         [Environment]::SetEnvironmentVariable($nombre, $variablesAnteriores[$nombre], 'Process')
