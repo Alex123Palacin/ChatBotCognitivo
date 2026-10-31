@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from ml.conversacion import responder_conversacion, responder_conversacion_stream
+from ml.conversacion import preferencias_conversacion, responder_conversacion, responder_conversacion_stream
 from ml.ollama import ErrorModelo
 from sesiones.models import SesionSemanal
 from sesiones.services import iniciar_conversacion, sesion_json
@@ -39,7 +39,13 @@ def contexto_modelo(usuario, sesion):
     primeros = Mensaje.objects.filter(usuario=usuario, remitente='usuario').order_by('fecha')[:2]
     citas = [f'Primeras palabras del estudiante: {m.contenido[:180]}' for m in primeros]
     citas += [f'Relato previo: {INDICADORES[e["indicador"]]["nombre"]}; cita: {e["cita"][:140]}' for e in recientes if e['indicador'] in INDICADORES]
-    return {'nombre': usuario.first_name, 'resumen': '\n'.join(citas)[:600]}
+    # Reconstruye preferencias solo de mensajes propios aún conservados. No añade tablas,
+    # no envía todo el historial al modelo y no conserva preferencias de textos eliminados.
+    estilo = Mensaje.objects.filter(usuario=usuario, remitente='usuario',
+        contenido__iregex=r'pregunt|consej|ay[uú]dame|(?:solo|solamente|quiero).{0,30}(?:convers|hablar|charlar|escuch)|esc[uú]chame'
+    ).order_by('fecha', 'id').values_list('contenido', flat=True)
+    return {'nombre': usuario.first_name, 'resumen': '\n'.join(citas)[:600],
+            'preferencias': preferencias_conversacion(estilo.iterator(chunk_size=100))}
 
 
 def chat_json(usuario):

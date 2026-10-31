@@ -114,4 +114,5 @@ class FlujoChatTests(TestCase):
             eventos = self.eventos(self.enviar(texto='Hola'))
         modelo.assert_not_called()
         self.assertEqual(eventos[-1]['tipo'], 'estado')
-        self.assertIn('colegio', eventos[-1]['chat']['mensajes'][-1]['contenido'])
+        self.assertIn('conversar', eventos[-1]['chat']['mensajes'][-1]['contenido'])
+        self.assertNotIn('?', eventos[-1]['chat']['mensajes'][-1]['contenido'])

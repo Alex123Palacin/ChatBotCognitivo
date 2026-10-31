@@ -1,8 +1,16 @@
+import json
 from unittest.mock import patch
 
 from django.test import SimpleTestCase, override_settings
 
 from .conversacion import construir_mensajes, normalizar_respuesta_escolar, responder_conversacion, responder_conversacion_stream
+from .respuesta import esquema_respuesta
+
+
+def flujo_json(partes):
+    yield '{"respuesta":"'
+    yield from partes
+    yield '"}'
 
 
 @override_settings(OLLAMA_CHAT_MODEL='qwen3:1.7b')
@@ -39,28 +47,30 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
     def test_respuesta_completa_y_progresiva_comparten_instrucciones_y_limite(self):
         historial = [{"role": "user", "content": "Tengo muchas tareas del colegio"}]
         contexto = {"nombre": "Ana", "semana": 1, "indicadores_pendientes": ["planificacion"]}
-        with patch("ml.conversacion.generar", return_value="Te escucho.") as completa:
+        with patch("ml.conversacion.generar", return_value=json.dumps({"respuesta": "Te escucho."})) as completa:
             self.assertEqual(responder_conversacion(historial, contexto), "Te escucho.")
-        with patch("ml.conversacion.generar_flujo", return_value=(parte for parte in ["Te ", "escucho."])) as progresiva:
+        with patch("ml.conversacion.generar_flujo", return_value=flujo_json(["Te ", "escucho."])) as progresiva:
             self.assertEqual(list(responder_conversacion_stream(historial, contexto)), ["Te ", "escucho."])
         self.assertEqual(completa.call_args, progresiva.call_args)
-        self.assertEqual(completa.call_args.kwargs, {"directo": True, "limite": 192, "modelo": "qwen3:1.7b"})
+        self.assertEqual(completa.call_args.kwargs, {"directo": True, "limite": 192, "modelo": "qwen3:1.7b", "formato": esquema_respuesta(), "temperatura": 0})
 
     @override_settings(OLLAMA_MODEL='deepseek-r1:8b', OLLAMA_CHAT_MODEL='qwen3:1.7b',
                        OLLAMA_CHAT_DIRECT=False, OLLAMA_CHAT_MAX_TOKENS=512)
     def test_modelo_rapido_independiente_del_analisis_sin_presupuesto_de_razonamiento(self):
-        with patch('ml.conversacion.generar', return_value='Podemos empezar por una tarea.') as modelo:
+        with patch('ml.conversacion.generar', return_value=json.dumps({"respuesta": 'Podemos empezar por una tarea.'})) as modelo:
             responder_conversacion([{'role': 'user', 'content': 'No sé organizar mis tareas'}])
-        self.assertEqual(modelo.call_args.kwargs, {'directo': False, 'limite': 192, 'modelo': 'qwen3:1.7b'})
+        self.assertEqual(modelo.call_args.kwargs, {'directo': False, 'limite': 192, 'modelo': 'qwen3:1.7b', 'formato': esquema_respuesta(), 'temperatura': 0})
 
     def test_stream_no_espera_que_finalice_toda_la_generacion(self):
         consumidos = []
 
         def flujo(*args, **kwargs):
+            yield '{"respuesta":"'
             consumidos.append("primero")
             yield "Hola "
             consumidos.append("segundo")
             yield ", te escucho."
+            yield '"}'
 
         with patch("ml.conversacion.generar_flujo", side_effect=flujo):
             respuesta = responder_conversacion_stream([{"role": "user", "content": "Estoy cansada"}])
@@ -73,7 +83,7 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
     @override_settings(OLLAMA_CHAT_DIRECT=True, OLLAMA_CHAT_MAX_TOKENS=512)
     def test_instalacion_con_limite_anterior_tambien_reduce_generacion_a_192(self):
         historial = [{"role": "user", "content": "Estoy preocupada por mis tareas"}]
-        with patch("ml.conversacion.generar", return_value="Te escucho.") as modelo:
+        with patch("ml.conversacion.generar", return_value=json.dumps({"respuesta": "Te escucho."})) as modelo:
             responder_conversacion(historial)
         self.assertEqual(modelo.call_args.kwargs["limite"], 192)
 
@@ -90,14 +100,14 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
 
     def test_saludo_con_malestar_no_se_confunde_con_saludo_social(self):
         contenido = "Hola, me siento mal por tantas tareas"
-        with patch("ml.conversacion.generar", return_value="Te escucho.") as completa:
+        with patch("ml.conversacion.generar", return_value=json.dumps({"respuesta": "Te escucho."})) as completa:
             self.assertEqual(responder_conversacion([{"role": "user", "content": contenido}]), "Te escucho.")
         self.assertEqual(completa.call_args.args[0][-1]["content"], contenido)
 
     def test_normaliza_solo_respuesta_del_asistente_y_conserva_articulos(self):
         contenido = "En la universidad soy universitaria; tengo créditos y debo ir al campus."
         historial = [{"role": "user", "content": contenido}]
-        with patch("ml.conversacion.generar", return_value="La universidad y tu carrera universitaria pueden esperar.") as modelo:
+        with patch("ml.conversacion.generar", return_value=json.dumps({"respuesta": "La universidad y tu carrera universitaria pueden esperar."})) as modelo:
             respuesta = responder_conversacion(historial)
         self.assertEqual(modelo.call_args.args[0][-1]["content"], contenido)
         self.assertEqual(respuesta, "El colegio y tu etapa escolar pueden esperar.")
@@ -106,7 +116,7 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
     def test_stream_normaliza_palabras_partidas_entre_fragmentos(self):
         historial = [{"role": "user", "content": "Tengo mucho trabajo"}]
         fragmentos = ["La uni", "versidad y los uni", "versitarios del cam", "pus."]
-        with patch("ml.conversacion.generar_flujo", return_value=(parte for parte in fragmentos)):
+        with patch("ml.conversacion.generar_flujo", return_value=flujo_json(fragmentos)):
             respuesta = "".join(responder_conversacion_stream(historial))
         self.assertEqual(respuesta, "El colegio y los escolares del colegio.")
 
@@ -115,8 +125,10 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
 
         def flujo(*args, **kwargs):
             try:
+                yield '{"respuesta":"'
                 yield "Te escucho. "
                 yield "Podemos organizar tus tareas."
+                yield '"}'
             finally:
                 cerrados.append(True)
 

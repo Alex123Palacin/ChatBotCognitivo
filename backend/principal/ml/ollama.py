@@ -288,9 +288,9 @@ class _TextoVisible:
         return texto
 
 
-def generar_flujo(mensajes, temperatura=0.4, limite=192, directo=False, timeout=None, modelo=None):
+def generar_flujo(mensajes, temperatura=0.4, limite=192, directo=False, timeout=None, modelo=None, formato=None):
     """Entrega palabras en cuanto Ollama las genera, con un plazo total acotado."""
-    url, datos = _solicitud(mensajes, None, temperatura, limite, True, directo, modelo=modelo)
+    url, datos = _solicitud(mensajes, formato, temperatura, limite, True, directo, modelo=modelo)
     filtro = _TextoVisible()
     hay_texto = False
     try:
