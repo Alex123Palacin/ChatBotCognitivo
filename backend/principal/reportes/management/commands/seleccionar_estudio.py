@@ -12,7 +12,7 @@ from reportes.models import MuestraEstudio
 
 
 class Command(BaseCommand):
-    help = 'Selecciona una única muestra aleatoria de 110 entre los 136 participantes del 11/09/2026.'
+    help = 'Selecciona una única muestra aleatoria de 110 entre los 136 participantes del 10/09/2026.'
 
     def add_arguments(self, parser):
         parser.add_argument('--aplicar', action='store_true')
@@ -27,7 +27,7 @@ class Command(BaseCommand):
             self.stdout.write(json.dumps({'existente': True, **muestra_json(existente)}))
             return
         lima = ZoneInfo('America/Lima')
-        inicio, fin = datetime(2026, 9, 11, 13, tzinfo=lima), datetime(2026, 9, 11, 18, tzinfo=lima)
+        inicio, fin = datetime(2026, 9, 10, 13, tzinfo=lima), datetime(2026, 9, 10, 18, tzinfo=lima)
         ids = list(get_user_model().objects.filter(
             is_staff=False, is_superuser=False, mensajes_chat__remitente='usuario',
             mensajes_chat__fecha__gte=inicio, mensajes_chat__fecha__lt=fin,

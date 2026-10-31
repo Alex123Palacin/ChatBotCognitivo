@@ -23,7 +23,7 @@ from reportes.indicadores import perfil_indicadores
 class EstudioTests(TestCase):
     @classmethod
     def setUpTestData(cls):
-        cls.fecha = datetime(2026, 9, 11, 13, tzinfo=ZoneInfo('America/Lima'))
+        cls.fecha = datetime(2026, 9, 10, 13, tzinfo=ZoneInfo('America/Lima'))
         User = get_user_model()
         User.objects.bulk_create([User(username=f'estudiante{i}', password='!') for i in range(136)])
         for u in User.objects.all():
@@ -112,6 +112,8 @@ class EstudioTests(TestCase):
 
     def test_migracion_inicializa_una_vez_sin_cambiar_registros(self):
         inicializar = importlib.import_module('reportes.migrations.0003_seleccion_inicial_estudio').seleccionar_si_procede
+        # La migración histórica conserva su fecha original; el comando usa la corregida.
+        Mensaje.objects.update(fecha=self.fecha + timedelta(days=1))
         anteriores = list(Mensaje.objects.values())
         inicializar(apps, SimpleNamespace(connection=connection))
         ids = set(muestra_actual().usuarios.values_list('pk', flat=True))

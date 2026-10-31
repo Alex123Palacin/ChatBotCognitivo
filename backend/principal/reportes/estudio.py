@@ -3,6 +3,7 @@ from django.db.models import Q
 
 from .models import MuestraEstudio
 
+# Identidad histórica estable: corregir las fechas no crea otra muestra ni otro sorteo.
 CLAVE_ESTUDIO = 'estudio-20260911'
 
 
