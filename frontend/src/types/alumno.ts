@@ -1,4 +1,5 @@
 export interface Alumno {
+  en_estudio: boolean
   id: number
   nombre: string
   username: string

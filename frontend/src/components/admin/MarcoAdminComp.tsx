@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import IconButtonUI from '../../ui/IconButtonUI'
+import logo from '../../assets/robot-junior.png'
 
 function MarcoAdminComp({ titulo, descripcion, children }: { titulo: string; descripcion: string; children: ReactNode }) {
   const { usuario, cerrarSesion } = useAuth()
@@ -28,7 +29,7 @@ function MarcoAdminComp({ titulo, descripcion, children }: { titulo: string; des
     <div className="min-h-dvh min-w-0 bg-linear-to-br from-slate-50 via-blue-50/30 to-indigo-50/40">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
         <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
-          <Link to="/administrador" className="text-base font-semibold text-slate-900 sm:text-lg">Chatbot Cognitivo <span className="ml-2 inline-block text-xs font-normal text-slate-500">Administración</span></Link>
+          <Link to="/administrador" className="flex min-w-0 items-center gap-3 text-base font-semibold text-slate-900 sm:text-lg"><img src={logo} alt="Robot de Chatbot Cognitivo" className="size-12 shrink-0 object-contain sm:size-14" /><span>Chatbot Cognitivo <span className="ml-2 inline-block text-xs font-normal text-slate-500">Administración</span></span></Link>
           <div className="flex items-center gap-3">
             <span className="max-w-[40vw] truncate sm:max-w-52 text-sm text-slate-500">{usuario?.nombre || usuario?.username}</span>
             <IconButtonUI etiqueta="Cerrar sesión" disabled={saliendo} onClick={() => { void salir() }}><LogOut size={19} /></IconButtonUI>

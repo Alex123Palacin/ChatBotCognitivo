@@ -18,12 +18,15 @@ from .indicadores import perfil_indicadores
 User = get_user_model()
 
 
-def alumno_json(usuario, ahora=None, muestra=None):
+def alumno_json(usuario, ahora=None, muestra=None, seleccionados=None):
     ahora = ahora or timezone.now()
+    muestra = muestra if muestra is not None else muestra_actual()
+    if seleccionados is None:
+        seleccionados = set(muestra.usuarios.values_list('pk', flat=True)) if muestra else set()
     perfil = getattr(usuario, 'perfil', None)
     ultima = perfil.ultima_actividad if perfil else None
     actividad = acotar_mensajes(usuario.mensajes_chat.filter(remitente='usuario'), muestra).annotate(dia=TruncDate('fecha')).aggregate(primero=Min('fecha'), ultimo=Max('fecha'), dias=Count('dia', distinct=True), cantidad=Count('id'), analizados=Count('id', filter=Q(analisis_estado='listo')))
-    return {'id': usuario.pk, 'nombre': usuario.first_name, 'username': usuario.username, 'email': usuario.email, 'ultima_actividad': ultima.isoformat() if ultima else None, 'en_linea': bool(perfil and perfil.conectado and ultima and ultima >= ahora - timedelta(minutes=5)), 'semana_actual': None, 'reportes_total': ReporteSemanal.objects.filter(sesion__usuario=usuario).count(), 'primer_mensaje': actividad['primero'].isoformat() if actividad['primero'] else None, 'ultimo_mensaje': actividad['ultimo'].isoformat() if actividad['ultimo'] else None, 'inicio_programa': perfil.inicio_programa.isoformat() if perfil and perfil.inicio_programa else None, 'dias_conversacion': actividad['dias'], 'mensajes_estudiante': actividad['cantidad'], 'mensajes_analizados': actividad['analizados'], 'analisis_pendientes': actividad['cantidad'] - actividad['analizados']}
+    return {'en_estudio': usuario.pk in seleccionados, 'id': usuario.pk, 'nombre': usuario.first_name, 'username': usuario.username, 'email': usuario.email, 'ultima_actividad': ultima.isoformat() if ultima else None, 'en_linea': bool(perfil and perfil.conectado and ultima and ultima >= ahora - timedelta(minutes=5)), 'semana_actual': None, 'reportes_total': ReporteSemanal.objects.filter(sesion__usuario=usuario).count(), 'primer_mensaje': actividad['primero'].isoformat() if actividad['primero'] else None, 'ultimo_mensaje': actividad['ultimo'].isoformat() if actividad['ultimo'] else None, 'inicio_programa': perfil.inicio_programa.isoformat() if perfil and perfil.inicio_programa else None, 'dias_conversacion': actividad['dias'], 'mensajes_estudiante': actividad['cantidad'], 'mensajes_analizados': actividad['analizados'], 'analisis_pendientes': actividad['cantidad'] - actividad['analizados']}
 
 
 @acceso(['GET'], administrador=True)
@@ -33,9 +36,8 @@ def alumnos(request):
     if settings.ESTUDIO_MUESTRA_OBLIGATORIA and not muestra_valida(muestra):
         return error('La muestra fija de 110 estudiantes no está disponible. No se han incluido otras cuentas.', 503)
     usuarios = User.objects.filter(is_staff=False, is_superuser=False)
-    if muestra:
-        usuarios = usuarios.filter(muestras_estudio=muestra)
-    return JsonResponse({'alumnos': [alumno_json(u, ahora, muestra) for u in usuarios.select_related('perfil').order_by('username')],
+    seleccionados = set(muestra.usuarios.values_list('pk', flat=True)) if muestra else set()
+    return JsonResponse({'alumnos': [alumno_json(u, ahora, muestra, seleccionados) for u in usuarios.select_related('perfil').order_by('username')],
                          'estudio': muestra_json(muestra)})
 
 

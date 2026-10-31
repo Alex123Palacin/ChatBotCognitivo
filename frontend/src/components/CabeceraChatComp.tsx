@@ -1,5 +1,6 @@
 import { Menu } from 'lucide-react'
 import IconButtonUI from '../ui/IconButtonUI'
+import logo from '../assets/robot-junior.png'
 
 interface CabeceraProps {
   abrirMenu: () => void
@@ -11,6 +12,7 @@ function CabeceraChatComp({ abrirMenu }: CabeceraProps) {
       <IconButtonUI etiqueta="Abrir menú" onClick={abrirMenu} className="-ml-2 md:hidden" aria-haspopup="dialog">
         <Menu size={21} />
       </IconButtonUI>
+      <img src={logo} alt="Robot de Chatbot Cognitivo" className="size-12 shrink-0 object-contain sm:size-14" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <p className="text-base font-semibold tracking-tight">Chatbot Cognitivo</p>

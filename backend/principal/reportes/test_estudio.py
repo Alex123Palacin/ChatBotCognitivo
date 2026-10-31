@@ -53,9 +53,10 @@ class EstudioTests(TestCase):
     def test_listado_excel_110_y_exclusion_sin_borrar_otras_cuentas(self):
         self.seleccionar()
         r = self.client.get('/api/admin/alumnos/').json()
-        self.assertEqual(len(r['alumnos']), 110)
+        self.assertEqual(len(r['alumnos']), 136)
         self.assertEqual(r['estudio']['poblacion'], 136)
-        ids = [u['id'] for u in r['alumnos']]
+        ids = [u['id'] for u in r['alumnos'] if u['en_estudio']]
+        self.assertEqual(len(ids), 110)
         respuesta = self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': ','.join(map(str, ids))})
         self.assertEqual(respuesta.status_code, 200)
         w = load_workbook(BytesIO(respuesta.content))
@@ -128,7 +129,8 @@ class EstudioTests(TestCase):
         call_command('seleccionar_estudio', aplicar=True, si_procede=True, stdout=StringIO())
         listado = self.client.get('/api/admin/alumnos/')
         self.assertEqual(listado.status_code, 200)
-        self.assertEqual(ids, {a['id'] for a in listado.json()['alumnos']})
+        self.assertEqual(len(listado.json()['alumnos']), 137)
+        self.assertEqual(ids, {a['id'] for a in listado.json()['alumnos'] if a['en_estudio']})
         excel = self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': ','.join(map(str, ids))})
         self.assertEqual(excel.status_code, 200)
         filas = list(load_workbook(BytesIO(excel.content))['Resultados'].values)[1:]
@@ -163,3 +165,20 @@ class EstudioTests(TestCase):
         call_command('seleccionar_estudio', aplicar=True, si_procede=True, stdout=salida)
         self.assertEqual(json.loads(salida.getvalue())['estado'], 'pendiente_de_poblacion')
         self.assertFalse(MuestraEstudio.objects.exists())
+
+    @override_settings(ESTUDIO_MUESTRA_OBLIGATORIA=True)
+    def test_total_111_con_cuenta_de_prueba_y_reporte_solo_110(self):
+        self.seleccionar()
+        ids = set(muestra_actual().usuarios.values_list('pk', flat=True))
+        User = get_user_model()
+        User.objects.filter(is_staff=False, is_superuser=False).exclude(pk__in=ids).delete()
+        prueba = User.objects.create_user('sujetoprueba', first_name='SujetoPrueba')
+        datos = self.client.get('/api/admin/alumnos/').json()
+        self.assertEqual(len(datos['alumnos']), 111)
+        self.assertEqual(datos['estudio']['seleccionados'], 110)
+        self.assertFalse(next(a for a in datos['alumnos'] if a['id'] == prueba.pk)['en_estudio'])
+        self.assertFalse(self.client.get(f'/api/admin/alumnos/{prueba.pk}/').json()['alumno']['en_estudio'])
+        self.assertEqual(self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': prueba.pk}).status_code, 400)
+        excel = self.client.get('/api/admin/evaluacion.xlsx', {'alumnos': ','.join(map(str, ids))})
+        self.assertEqual(excel.status_code, 200)
+        self.assertEqual(load_workbook(BytesIO(excel.content))['Resultados'].max_row, 111)

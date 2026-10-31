@@ -17,7 +17,7 @@ function AlumnoPage() {
       <EstadoCargaComp cargando={cargando} error={error} reintentar={refrescar} />
       {datos && <div className="space-y-8">
         <InformacionAlumnoComp alumno={datos.alumno} />
-        <DescargarEvaluacionComp alumnos={[datos.alumno.id]} />
+        {datos.alumno.en_estudio ? <DescargarEvaluacionComp alumnos={[datos.alumno.id]} /> : <p className="text-sm text-slate-500">Esta cuenta no forma parte del reporte de investigación.</p>}
         {datos.reporte_actual ? <ReporteActualComp reporte={datos.reporte_actual} /> : (
           <section className="rounded-2xl border border-slate-200 bg-white p-6">
             <h2 className="text-lg font-semibold">Análisis actual de la conversación</h2>
