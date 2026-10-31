@@ -42,7 +42,7 @@ def contexto_modelo(usuario, sesion):
     # Reconstruye preferencias solo de mensajes propios aún conservados. No añade tablas,
     # no envía todo el historial al modelo y no conserva preferencias de textos eliminados.
     estilo = Mensaje.objects.filter(usuario=usuario, remitente='usuario',
-        contenido__iregex=r'pregunt|consej|ay[uú]dame|(?:solo|solamente|quiero).{0,30}(?:convers|hablar|charlar|escuch)|esc[uú]chame'
+        contenido__iregex=r'pregunt|consej|ay[uú]dame|ejercici|respir|(?:solo|solamente|quiero).{0,30}(?:convers|hablar|charlar|escuch)|esc[uú]chame'
     ).order_by('fecha', 'id').values_list('contenido', flat=True)
     return {'nombre': usuario.first_name, 'resumen': '\n'.join(citas)[:600],
             'preferencias': preferencias_conversacion(estilo.iterator(chunk_size=100))}

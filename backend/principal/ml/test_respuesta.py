@@ -2,10 +2,21 @@ import json
 from django.test import SimpleTestCase
 
 from .ollama import ErrorModelo
-from .respuesta import leer_respuesta, texto_respuesta_flujo, sin_ofertas_repetidas
+from .respuesta import leer_respuesta, texto_respuesta_flujo, sin_ofertas_repetidas, limitar_preguntas
 
 
 class RespuestaGuiadaTests(SimpleTestCase):
+    def test_una_pregunta_por_iniciativa_propia_sin_perder_afirmaciones(self):
+        texto='Suena difícil. ¿Qué ocurrió hoy? ¿Quieres contarme más؟ Podemos ir poco a poco.'
+        for corte in range(len(texto)+1):
+            salida=''.join(limitar_preguntas(iter([texto[:corte],texto[corte:]])))
+            self.assertEqual(salida.count('?'),1)
+            self.assertIn('¿Qué ocurrió hoy?',salida)
+            self.assertNotIn('Quieres contarme',salida)
+            self.assertIn('Podemos ir poco a poco.',salida)
+        self.assertNotIn('?', ''.join(limitar_preguntas(iter([texto]),0)))
+        self.assertEqual(''.join(limitar_preguntas(iter([texto]),None)).count('?'),2)
+
     def test_solo_escucha_no_repite_ofertas_partidas_entre_fragmentos(self):
         texto = 'Tu día suena cansado. Si quieres, puedo enseñarte un ejercicio. La música te acompañó un rato.'
         for corte in range(len(texto)+1):

@@ -1,12 +1,16 @@
 import json
 import re
 import unicodedata
+import logging
 from contextlib import closing
 
 from django.conf import settings
 
-from .ollama import generar, generar_flujo, historial_reciente, presupuesto_contexto
-from .respuesta import esquema_respuesta, leer_respuesta, texto_respuesta_flujo, sin_ofertas_repetidas
+from .ollama import ErrorModelo, generar, generar_flujo, historial_reciente, presupuesto_contexto
+from .respuesta import esquema_respuesta, leer_respuesta, texto_respuesta_flujo, sin_ofertas_repetidas, limitar_preguntas
+from .apoyo import preparar_apoyo, completar_apoyo, puede_preguntar, respuesta_prioritaria
+
+logger = logging.getLogger(__name__)
 
 
 INSTRUCCIONES = """Eres Chatbot Cognitivo, un asistente de apoyo para estudiantes de colegio, especialmente de quinto de secundaria en Perú.
@@ -19,13 +23,18 @@ abreviaturas sin corregirlas salvo que lo pida. Sigue el tema y comenta un detal
 concreto de su mensaje. No repitas presentaciones ni empieces siempre con «Entiendo».
 Responde normalmente en 1 a 3 frases breves; si pide pasos, explícalos directamente.
 La conversación es libre, nunca un cuestionario: muchas respuestas no necesitan preguntas.
-POR DEFECTO RESPONDE SIN PREGUNTAS, sin ofertas ni consejos no solicitados.
-Si él solicita preguntas, puedes hacerlas. No interrogues para completar indicadores.
+Puedes hacer una pregunta breve si ayuda a comprender lo que siente o adaptar una
+ayuda, sin preguntar en cada respuesta ni hacer preguntas consecutivas por iniciativa
+propia. No interrogues para completar indicadores ni para medir frecuencias.
+Si relata malestar, acompaña primero y ofrece una estrategia concreta adecuada al caso.
+Atiendes síntomas físicos y psicológicos; no conviertas todo en horarios o tareas.
+La planificación sirve si ese es el problema, no como respuesta automática al malestar.
 Cuando pida una idea concreta, dásela directamente; no le preguntes si quiere ayuda.
 Si acepta una propuesta con «sí», «dale» u «ok», REALIZA lo ofrecido ahora con pasos
 concretos. Una propuesta aceptada se desarrolla; no se vuelve a ofrecer.
 Si faltan datos, da un método general o señala qué información falta sin inventar
 temas, fechas, nombres ni circunstancias. No copies ofertas repetidas del historial.
+Si ya probó algo, toma en cuenta cómo le fue: no repitas lo mismo si no le ayudó.
 Respeta si quiere solo conversar o rechaza un tema, consejo o ejercicio. Escucha y
 comenta sin llevarlo otra vez a esa actividad. No impongas técnicas de respiración.
 Si pide una respuesta sin preguntas, no incluyas preguntas. Mantén sus preferencias
@@ -94,14 +103,18 @@ def normalizar_respuesta_escolar(texto):
 def preferencias_conversacion(mensajes, inicial=None):
     """Deriva solo preferencias de estilo; nunca convierte texto libre en reglas."""
     preferencias = {campo: (inicial or {}).get(campo) is True
-                    for campo in ('sin_preguntas', 'solo_escucha', 'preguntas_solicitadas')}
+                    for campo in ('sin_preguntas', 'solo_escucha', 'preguntas_solicitadas', 'sin_ejercicios', 'sin_respiracion')}
     patrones = [
-        (r'\b(?:no\s+(?:me\s+)?(?:hagas?|agas?)\s+(?:mas\s+|tantas?\s+)?preguntas|no\s+(?:me\s+)?pregunt\w*|deja\s+de\s+pregunt\w*|no\s+quiero\s+(?:mas\s+)?preguntas|no\s+quiero\s+que\s+(?:me\s+)?(?:hagas?\s+preguntas|pregunt\w*))\b', {'sin_preguntas': True}),
+        (r'\b(?:no\s+(?:me\s+)?(?:hagas?|agas?)\s+(?:mas\s+|tantas?\s+)?preguntas|no\s+que\s+(?:me\s+)?(?:hagas?\s+preguntas|pregunt\w*)|no\s+(?:me\s+)?pregunt\w*|deja\s+de\s+pregunt\w*|no\s+quiero\s+(?:mas\s+)?preguntas|no\s+quiero\s+que\s+(?:me\s+)?(?:hagas?\s+preguntas|pregunt\w*))\b', {'sin_preguntas': True}),
         (r'\b(?:sin\s+preguntas)\b', {'sin_preguntas': True}),
-        (r'\b(?:quiero\s+conversar|(?:solo|solamente|nomas)\s+(?:quiero\s+)?(?:conversar|hablar|charlar))\b', {'sin_preguntas': True, 'solo_escucha': True}),
-        (r'\b(?:(?:solo|solamente)\s+(?:quiero\s+que\s+me\s+)?escuch\w*|escuchame|no\s+me\s+(?:des\s+consejos?|aconsej\w*)|no\s+quiero\s+(?:que\s+me\s+des\s+)?(?:mas\s+)?consejos?)\b', {'solo_escucha': True, 'sin_preguntas': True}),
+        (r'\b(?:quiero\s+conversar|(?:solo|solamente|nomas)\s+(?:quiero\s+)?(?:conversar|hablar|charlar))\b', {'solo_escucha': True}),
+        (r'\b(?:(?:solo|solamente)\s+(?:quiero\s+que\s+me\s+)?escuch\w*|escuchame|no\s+me\s+(?:des\s+consejos?|aconsej\w*)|no\s+quiero\s+(?:que\s+me\s+des\s+)?(?:mas\s+)?consejos?)\b', {'solo_escucha': True}),
         (r'(?<!no )\b(?:(?:ahora\s+)?(?:si\s+)?puedes\s+pregunt\w*|hazme\s+(?:una\s+|mas\s+)?preguntas?|preguntame)\b', {'sin_preguntas': False, 'preguntas_solicitadas': True}),
         (r'(?<!no )\b(?:ayudame|dame\s+(?:un\s+|unos\s+)?consejos?|(?:ahora\s+)?(?:si\s+)?quiero\s+(?:un\s+)?consejos?)\b', {'solo_escucha': False}),
+        (r'\bno\s+(?:quiero\s+(?:hacer\s+)?|me\s+propongas\s+)(?:mas\s+)?ejercicios?\b', {'sin_ejercicios': True}),
+        (r'\bno\s+(?:quiero\s+(?:hacer\s+)?|me\s+propongas\s+)(?:(?:ejercicios?|tecnicas?)\s+de\s+)?respir\w*', {'sin_respiracion': True}),
+        (r'(?<!no )\b(?:si\s+quiero|hagamos)\s+(?:un\s+)?ejercicio\b', {'sin_ejercicios': False}),
+        (r'(?<!no )\b(?:si\s+quiero|hagamos)\s+(?:(?:un\s+ejercicio|una\s+tecnica)\s+de\s+)?respir\w*', {'sin_respiracion': False}),
     ]
     for mensaje in mensajes:
         if not isinstance(mensaje, str):
@@ -158,6 +171,7 @@ def construir_mensajes(historial, contexto=None):
     # El contexto conserva preferencias anteriores a los ocho turnos enviados al modelo.
     recientes_usuario = [m['content'] for m in historial if m.get('role') == 'user' and isinstance(m.get('content'), str)]
     preferencias = preferencias_conversacion(recientes_usuario, contexto.get('preferencias'))
+    apoyo = preparar_apoyo(historial, preferencias)
     ultimo_usuario = next((m.get('content', '') for m in reversed(historial)
                            if m.get('role') == 'user' and isinstance(m.get('content'), str)), '')
     # Repite solo el formato relevante al turno, sin interpolar instrucciones
@@ -166,10 +180,20 @@ def construir_mensajes(historial, contexto=None):
         instrucciones += ('\nFormato de este turno, salvo peligro inmediato: responde directamente '
                           'sin preguntas. Conversa sobre lo que cuenta o desarrolla la ayuda '
                           'que pidió, sin pedir permiso otra vez. Esta preferencia sigue vigente.')
-    else:
+    elif apoyo:
+        instrucciones += ('\nEn este turno hay una orientación de autocuidado preparada para '
+                          + apoyo['tema'] + '. Escribe SOLO una frase breve y cálida que reconozca '
+                          'un detalle concreto de su mensaje, sin empezar por Entiendo ni cambiar '
+                          'cómo se describe. No añadas ejercicios, '
+                          'preguntas, planes ni consejos: la orientación se incorpora después. '
+                          'No anuncies ese proceso ni atribuyas una causa médica.')
+    elif puede_preguntar(historial, preferencias):
         instrucciones += ('\nPróxima respuesta: acompaña lo que acaba de contar. Si pide una idea, '
-                          'dásela directamente. Responde sin preguntas por defecto; solo aclara '
-                          'un dato imprescindible o haz preguntas si él las ha solicitado.')
+                          'dásela directamente. Puedes hacer UNA pregunta natural si aporta algo; '
+                          'no es obligatorio y no debe volver a ofrecer una ayuda ya aceptada.')
+    else:
+        instrucciones += ('\nEste turno sin preguntas: ya preguntaste hace poco. Acompaña su '
+                          'respuesta, aporta algo concreto y sigue el hilo sin interrogar.')
     if preferencias['solo_escucha']:
         instrucciones += ('\nAhora prefiere conversar sin consejos: comenta el detalle que contó. '
                           'No propongas actividades ni termines con Si quieres puedo. '
@@ -221,9 +245,16 @@ def _opciones_respuesta(historial, contexto=None):
     preferencias = preferencias_conversacion(
         (m['content'] for m in historial if m.get('role') == 'user' and isinstance(m.get('content'), str)),
         (contexto or {}).get('preferencias'))
-    permite = preferencias['preguntas_solicitadas'] and not preferencias['sin_preguntas']
-    return {"directo": directo, "limite": limite, "modelo": modelo,
-            "temperatura": 0, "formato": esquema_respuesta(permite)}
+    apoyo = preparar_apoyo(historial, preferencias)
+    if apoyo:
+        limite = min(limite, 96)
+    permite = puede_preguntar(historial, preferencias) and apoyo is None
+    opciones = {"directo": directo, "limite": limite, "modelo": modelo,
+                "temperatura": 0, "formato": esquema_respuesta(permite)}
+    if apoyo:
+        opciones['formato'] = esquema_respuesta(False, max_caracteres=140)
+        opciones['timeout'] = min(getattr(settings, 'OLLAMA_TIMEOUT', 180), 8)
+    return opciones
 
 
 def _solo_escucha(historial, contexto):
@@ -234,23 +265,76 @@ def _solo_escucha(historial, contexto):
 
 def responder_conversacion(historial, contexto=None):
     """Responde con empatía; el servidor conserva el historial autorizado."""
+    prioritaria = respuesta_prioritaria(historial)
+    if prioritaria:
+        return prioritaria
     social = _respuesta_social(historial)
     if social is not None:
         return social
-    respuesta = leer_respuesta(generar(construir_mensajes(historial, contexto), **_opciones_respuesta(historial, contexto)))
+    preferencias = preferencias_conversacion(
+        (m['content'] for m in historial if m.get('role') == 'user' and isinstance(m.get('content'), str)),
+        (contexto or {}).get('preferencias'))
+    apoyo = preparar_apoyo(historial, preferencias)
+    try:
+        respuesta = leer_respuesta(generar(construir_mensajes(historial, contexto), **_opciones_respuesta(historial, contexto)))
+    except ErrorModelo:
+        if not apoyo:
+            raise
+        logger.warning('Se utiliza el recurso de autocuidado preparado: introducción del modelo no disponible.')
+        respuesta = ''
     if _solo_escucha(historial, contexto):
         respuesta = ''.join(sin_ofertas_repetidas(iter([respuesta])))
+    if apoyo:
+        respuesta = _introduccion_apoyo(respuesta, apoyo['tema']) + completar_apoyo(apoyo)
+    else:
+        maximo = (None if preferencias['preguntas_solicitadas'] else 1) if puede_preguntar(historial, preferencias) else 0
+        respuesta = ''.join(limitar_preguntas(iter([respuesta]), maximo))
     return normalizar_respuesta_escolar(respuesta)
 
 
 def responder_conversacion_stream(historial, contexto=None):
     """Entrega texto conforme lo produce Ollama, sin esperar toda la respuesta."""
+    prioritaria = respuesta_prioritaria(historial)
+    if prioritaria:
+        yield prioritaria
+        return
     social = _respuesta_social(historial)
     if social is not None:
         yield social
         return
+    preferencias = preferencias_conversacion(
+        (m['content'] for m in historial if m.get('role') == 'user' and isinstance(m.get('content'), str)),
+        (contexto or {}).get('preferencias'))
+    apoyo = preparar_apoyo(historial, preferencias)
     with closing(generar_flujo(construir_mensajes(historial, contexto), **_opciones_respuesta(historial, contexto))) as flujo:
         texto = texto_respuesta_flujo(flujo)
         if _solo_escucha(historial, contexto):
             texto = sin_ofertas_repetidas(texto)
-        yield from _normalizar_flujo_escolar(texto)
+        if apoyo:
+            # La frase corta se valida antes de mostrarla; el recurso no lo inventa el modelo.
+            try:
+                introduccion = ''.join(texto)
+            except ErrorModelo:
+                logger.warning('Se utiliza el recurso de autocuidado preparado: introducción del modelo no disponible.')
+                introduccion = ''
+            yield normalizar_respuesta_escolar(_introduccion_apoyo(introduccion, apoyo['tema']))
+            yield completar_apoyo(apoyo)
+        else:
+            maximo = (None if preferencias['preguntas_solicitadas'] else 1) if puede_preguntar(historial, preferencias) else 0
+            yield from _normalizar_flujo_escolar(limitar_preguntas(texto, maximo))
+
+
+def _introduccion_apoyo(texto, tema=''):
+    for frase in re.split(r'(?<=[.!?])\s+', texto.strip()):
+        if frase.casefold().strip(' .!') in ('entiendo', 'perfecto', 'claro'):
+            continue
+        if re.match(r'entiendo\s+que\s+(?:te\s+sientas|est[aá]s)\s+nervios[oa]', frase, re.I):
+            continue
+        if (frase.strip() and len(frase) <= 220 and not re.search(r'[?？﹖؟⸮⁇]', frase)
+                and not re.search(r'\b(?:respira|inhala|exhala|aguanta|toma|haz|organiza|debes|tienes ansiedad|es ansiedad|medicamento)\b', frase, re.I)):
+            return frase
+    return {
+        'malestar corporal relatado': 'Notar esas sensaciones en el cuerpo puede resultar inquietante; podemos ir poco a poco.',
+        'preocupación o nervios relatados': 'Que esa preocupación siga dando vueltas puede ser agotador; merece que la atendamos con calma.',
+        'descanso o concentración afectados': 'Es difícil descansar o concentrarte cuando algo te está afectando; no tienes que resolverlo todo de golpe.',
+    }.get(tema, 'Lo que cuentas merece atención; podemos ir poco a poco con cómo te sientes.')

@@ -52,14 +52,14 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
         with patch("ml.conversacion.generar_flujo", return_value=flujo_json(["Te ", "escucho."])) as progresiva:
             self.assertEqual(list(responder_conversacion_stream(historial, contexto)), ["Te ", "escucho."])
         self.assertEqual(completa.call_args, progresiva.call_args)
-        self.assertEqual(completa.call_args.kwargs, {"directo": True, "limite": 192, "modelo": "qwen3:1.7b", "formato": esquema_respuesta(), "temperatura": 0})
+        self.assertEqual(completa.call_args.kwargs, {"directo": True, "limite": 192, "modelo": "qwen3:1.7b", "formato": esquema_respuesta(True), "temperatura": 0})
 
     @override_settings(OLLAMA_MODEL='deepseek-r1:8b', OLLAMA_CHAT_MODEL='qwen3:1.7b',
                        OLLAMA_CHAT_DIRECT=False, OLLAMA_CHAT_MAX_TOKENS=512)
     def test_modelo_rapido_independiente_del_analisis_sin_presupuesto_de_razonamiento(self):
         with patch('ml.conversacion.generar', return_value=json.dumps({"respuesta": 'Podemos empezar por una tarea.'})) as modelo:
             responder_conversacion([{'role': 'user', 'content': 'No sé organizar mis tareas'}])
-        self.assertEqual(modelo.call_args.kwargs, {'directo': False, 'limite': 192, 'modelo': 'qwen3:1.7b', 'formato': esquema_respuesta(), 'temperatura': 0})
+        self.assertEqual(modelo.call_args.kwargs, {'directo': False, 'limite': 192, 'modelo': 'qwen3:1.7b', 'formato': esquema_respuesta(True), 'temperatura': 0})
 
     def test_stream_no_espera_que_finalice_toda_la_generacion(self):
         consumidos = []
@@ -85,7 +85,7 @@ class ConversacionEscolarRapidaTests(SimpleTestCase):
         historial = [{"role": "user", "content": "Estoy preocupada por mis tareas"}]
         with patch("ml.conversacion.generar", return_value=json.dumps({"respuesta": "Te escucho."})) as modelo:
             responder_conversacion(historial)
-        self.assertEqual(modelo.call_args.kwargs["limite"], 192)
+        self.assertEqual(modelo.call_args.kwargs["limite"], 96)
 
     def test_saludos_y_cortesia_exactos_responden_sin_cargar_modelo(self):
         with patch("ml.conversacion.generar") as completa, patch("ml.conversacion.generar_flujo") as progresiva:
