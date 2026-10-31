@@ -3,6 +3,7 @@ import { LogOut, MessageCircle, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import IconButtonUI from '../ui/IconButtonUI'
+import logo from '../assets/robot-junior.png'
 
 interface BarraLateralProps {
   abierto: boolean
@@ -31,10 +32,11 @@ function BarraLateralComp({ abierto, cerrar }: BarraLateralProps) {
 
   const contenido = (
     <>
-      <Link to="/chat" onClick={cerrar} className="rounded-lg focus-visible:outline-2 focus-visible:outline-blue-600">
+      <Link to="/chat" onClick={cerrar} className="flex shrink-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-blue-600">
+        <img src={logo} alt="Robot de Chatbot Cognitivo" className="size-20 shrink-0 object-contain" />
         <span className="text-[15px] leading-5 font-semibold tracking-tight">Chatbot<span className="block text-slate-500">Cognitivo</span></span>
       </Link>
-      <div className="mt-10">
+      <div className="mt-7">
         <p className="mb-3 px-2 text-[10px] font-semibold tracking-[0.13em] text-slate-500 uppercase">Tu espacio</p>
         <div aria-current="page" className="flex items-start gap-3 rounded-xl border border-blue-100/80 bg-blue-50 px-3 py-3.5 text-blue-700">
           <MessageCircle size={18} className="mt-0.5 shrink-0" />
